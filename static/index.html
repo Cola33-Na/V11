@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>圖書查詢</title>
-    <!-- 加入 SheetJS 函式庫以支援 Excel 解析 -->
+    <!-- 引入 SheetJS 用於解析 Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -1667,6 +1667,42 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #a8a8a8;
         }
+
+        /* Excel 工作表選擇器樣式 */
+        .sheet-selector {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .sheet-selector label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+
+        .sheet-selector select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .sheet-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #1976d2;
+            border-left: 3px solid #667eea;
+        }
     </style>
 <base target="_blank">
 </head>
@@ -2088,24 +2124,32 @@
             <h3 id="uploadModalTitle" style="text-align: left;">📤 上傳檔案</h3>
 
             <div class="upload-modal-content">
-                <!-- 修改：支援 CSV 與 Excel 檔案 -->
+                <!-- 修改：支援 CSV 和 Excel 檔案 -->
                 <input type="file" id="modalFileInput" accept=".csv,.xlsx,.xls" onchange="handleModalFileSelect(event)" style="display: none;">
                 <label for="modalFileInput" class="upload-area" id="modalUploadArea" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; margin: 20px 0;">
                     <div class="upload-icon">📁</div>
                     <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">點擊選擇檔案</div>
                     <div class="upload-hint" style="font-size: 13px; color: #888; line-height: 1.6;">
-                        支援格式：CSV, Excel (.xlsx, .xls)<br>
-                        A,B,C,D,E 欄位為資料，F欄為位置<br>
+                        支援格式：CSV (.csv)、Excel (.xlsx, .xls)<br>
+                        欄位對應：A,B,C,D,E 欄為資料，F欄為位置<br>
                         檔案大小限制：5MB
                     </div>
                 </label>
 
+                <!-- Excel 工作表選擇器（僅在選擇 Excel 時顯示） -->
+                <div class="sheet-selector" id="sheetSelector" style="display: none;">
+                    <label for="sheetSelect">選擇工作表：</label>
+                    <select id="sheetSelect" onchange="onSheetSelect()">
+                        <option value="">請選擇工作表...</option>
+                    </select>
+                    <div class="sheet-info" id="sheetInfo" style="display: none;">
+                        已選擇工作表，準備上傳
+                    </div>
+                </div>
+
                 <div id="uploadFileInfo" style="display: none; margin: 15px 0; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #28a745; text-align: left;">
                     <div style="font-weight: 600; color: #2e7d32; font-size: 14px;">✅ 已選擇檔案：<span id="selectedFileName"></span></div>
-                    <div id="excelSheetInfo" style="margin-top: 8px; font-size: 13px; color: #666; display: none;">
-                        工作表：<span id="excelSheetName"></span> | 
-                        資料筆數：<span id="excelRowCount"></span> 筆
-                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;" id="selectedFileDetails"></div>
                 </div>
 
                 <div class="upload-progress-container" id="uploadProgressContainer">
@@ -2148,6 +2192,12 @@
         let currentUploadController = null;
         let isProcessingQuickAdd = false;
         const MAX_LOGS = 50;
+        
+        // Excel 處理相關變數
+        let excelWorkbook = null;
+        let excelSheets = [];
+        let selectedSheetName = '';
+        let parsedExcelData = null;
 
         //================ 初始化 =================
         document.addEventListener('DOMContentLoaded', function() {
@@ -3918,10 +3968,20 @@
 
             // 重置所有狀態
             selectedModalFile = null;
+            excelWorkbook = null;
+            excelSheets = [];
+            selectedSheetName = '';
+            parsedExcelData = null;
+            
             document.getElementById('modalFileInput').value = '';
             document.getElementById('uploadFileInfo').style.display = 'none';
             document.getElementById('selectedFileName').textContent = '';
-            document.getElementById('excelSheetInfo').style.display = 'none';
+            document.getElementById('selectedFileDetails').textContent = '';
+
+            // 隱藏工作表選擇器
+            document.getElementById('sheetSelector').style.display = 'none';
+            document.getElementById('sheetSelect').innerHTML = '<option value="">請選擇工作表...</option>';
+            document.getElementById('sheetInfo').style.display = 'none';
 
             // 重置進度條（隱藏）
             document.getElementById('uploadProgressContainer').classList.remove('active');
@@ -3953,8 +4013,8 @@
                 <div class="upload-icon">📁</div>
                 <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">點擊選擇檔案</div>
                 <div class="upload-hint" style="font-size: 13px; color: #888; line-height: 1.6;">
-                    支援格式：CSV, Excel (.xlsx, .xls)<br>
-                    A,B,C,D,E 欄位為資料，F欄為位置<br>
+                    支援格式：CSV (.csv)、Excel (.xlsx, .xls)<br>
+                    欄位對應：A,B,C,D,E 欄為資料，F欄為位置<br>
                     檔案大小限制：5MB
                 </div>
             `;
@@ -3986,7 +4046,7 @@
             document.body.style.overflow = '';
         }
 
-        // 修改：支援 Excel 檔案預覽
+        // 處理檔案選擇（支援 CSV 與 Excel）
         function handleModalFileSelect(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -3995,16 +4055,14 @@
             const validTypes = [
                 'text/csv',
                 'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/octet-stream'
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             ];
             const validExtensions = ['.csv', '.xlsx', '.xls'];
-            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
             
+            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
             const isValidExtension = validExtensions.includes(fileExtension);
-            const isValidType = validTypes.includes(file.type) || file.type === '';
-
-            if (!isValidExtension && !isValidType) {
+            
+            if (!isValidExtension && !validTypes.includes(file.type)) {
                 showUploadModalStatus('❌ 請選擇 CSV 或 Excel 檔案 (.csv, .xlsx, .xls)', 'error');
                 return;
             }
@@ -4015,62 +4073,129 @@
             }
 
             selectedModalFile = file;
+            
+            // 顯示檔案資訊
             document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('selectedFileDetails').textContent = `大小：${(file.size / 1024).toFixed(1)} KB | 類型：${fileExtension.toUpperCase()}`;
             document.getElementById('uploadFileInfo').style.display = 'block';
-            document.getElementById('modalUploadBtn').disabled = false;
 
             const uploadArea = document.getElementById('modalUploadArea');
             uploadArea.classList.add('has-file');
-            
-            // 如果是 Excel 檔案，顯示預覽資訊
-            if (fileExtension === '.xlsx' || fileExtension === '.xls') {
-                previewExcelFile(file);
+            uploadArea.innerHTML = `
+                <div class="upload-icon">✅</div>
+                <div style="font-weight: 600; font-size: 18px; margin-bottom: 5px;">${escapeHtml(file.name)}</div>
+                <div style="color: #28a745; font-size: 14px; font-weight: 500;">
+                    檔案大小：${(file.size / 1024).toFixed(1)} KB<br>
+                    點擊重新選擇
+                </div>
+            `;
+
+            // 根據檔案類型處理
+            if (fileExtension === '.csv') {
+                // CSV 檔案直接讀取
+                readCSVFile(file);
             } else {
-                uploadArea.innerHTML = `
-                    <div class="upload-icon">✅</div>
-                    <div style="font-weight: 600; font-size: 18px; margin-bottom: 5px;">${escapeHtml(file.name)}</div>
-                    <div style="color: #28a745; font-size: 14px; font-weight: 500;">
-                        檔案大小：${(file.size / 1024).toFixed(1)} KB<br>
-                        點擊重新選擇
-                    </div>
-                `;
-                showUploadModalStatus('✅ CSV 檔案已選擇，請點擊「開始上傳」', 'success');
+                // Excel 檔案需要選擇工作表
+                readExcelFile(file);
             }
+
+            showUploadModalStatus('✅ 檔案已選擇，請點擊「開始上傳」', 'success');
         }
 
-        // 新增：預覽 Excel 檔案資訊
-        function previewExcelFile(file) {
+        // 讀取 CSV 檔案
+        function readCSVFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parsedExcelData = e.target.result;
+                document.getElementById('modalUploadBtn').disabled = false;
+            };
+            reader.onerror = function() {
+                showUploadModalStatus('❌ 讀取 CSV 檔案失敗', 'error');
+            };
+            reader.readAsText(file);
+        }
+
+        // 讀取 Excel 檔案並顯示工作表選擇器
+        function readExcelFile(file) {
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    excelWorkbook = XLSX.read(data, { type: 'array' });
                     
-                    const rowCount = jsonData.length > 0 ? jsonData.length - 1 : 0; // 扣除標題列
+                    // 取得所有工作表名稱
+                    excelSheets = excelWorkbook.SheetNames;
                     
-                    document.getElementById('excelSheetName').textContent = firstSheetName;
-                    document.getElementById('excelRowCount').textContent = rowCount;
-                    document.getElementById('excelSheetInfo').style.display = 'block';
+                    if (excelSheets.length === 0) {
+                        showUploadModalStatus('❌ Excel 檔案中沒有找到工作表', 'error');
+                        return;
+                    }
                     
-                    const uploadArea = document.getElementById('modalUploadArea');
-                    uploadArea.innerHTML = `
-                        <div class="upload-icon">✅</div>
-                        <div style="font-weight: 600; font-size: 18px; margin-bottom: 5px;">${escapeHtml(file.name)}</div>
-                        <div style="color: #28a745; font-size: 14px; font-weight: 500;">
-                            工作表：${escapeHtml(firstSheetName)} | ${rowCount} 筆資料<br>
-                            點擊重新選擇
-                        </div>
-                    `;
-                    showUploadModalStatus('✅ Excel 檔案已選擇，請點擊「開始上傳」', 'success');
-                } catch (err) {
-                    console.error('Excel 預覽失敗:', err);
-                    showUploadModalStatus('⚠️ 無法預覽 Excel 內容，但仍可嘗試上傳', 'warning');
+                    // 如果只有一個工作表，自動選擇
+                    if (excelSheets.length === 1) {
+                        selectedSheetName = excelSheets[0];
+                        convertExcelToCSV(selectedSheetName);
+                    } else {
+                        // 多個工作表，顯示選擇器
+                        const sheetSelect = document.getElementById('sheetSelect');
+                        sheetSelect.innerHTML = '<option value="">請選擇工作表...</option>';
+                        
+                        excelSheets.forEach(sheetName => {
+                            const option = document.createElement('option');
+                            option.value = sheetName;
+                            option.textContent = sheetName;
+                            sheetSelect.appendChild(option);
+                        });
+                        
+                        document.getElementById('sheetSelector').style.display = 'block';
+                        document.getElementById('modalUploadBtn').disabled = true;
+                    }
+                    
+                } catch (error) {
+                    console.error('Excel 解析錯誤:', error);
+                    showUploadModalStatus('❌ 無法解析 Excel 檔案：' + error.message, 'error');
                 }
             };
+            reader.onerror = function() {
+                showUploadModalStatus('❌ 讀取 Excel 檔案失敗', 'error');
+            };
             reader.readAsArrayBuffer(file);
+        }
+
+        // 當選擇工作表時
+        function onSheetSelect() {
+            const sheetSelect = document.getElementById('sheetSelect');
+            selectedSheetName = sheetSelect.value;
+            
+            if (selectedSheetName) {
+                convertExcelToCSV(selectedSheetName);
+                document.getElementById('sheetInfo').style.display = 'block';
+                document.getElementById('sheetInfo').textContent = `已選擇工作表「${selectedSheetName}」，準備上傳`;
+            } else {
+                document.getElementById('modalUploadBtn').disabled = true;
+                document.getElementById('sheetInfo').style.display = 'none';
+            }
+        }
+
+        // 將選擇的 Excel 工作表轉換為 CSV
+        function convertExcelToCSV(sheetName) {
+            try {
+                const worksheet = excelWorkbook.Sheets[sheetName];
+                
+                // 轉換為 CSV，使用 \t 作為分隔符以確保正確解析
+                const csv = XLSX.utils.sheet_to_csv(worksheet, {
+                    FS: ',',  // 欄位分隔符
+                    RS: '\n',  // 列分隔符
+                    strip: true  // 去除空白
+                });
+                
+                parsedExcelData = csv;
+                document.getElementById('modalUploadBtn').disabled = false;
+                
+            } catch (error) {
+                console.error('轉換 CSV 失敗:', error);
+                showUploadModalStatus('❌ 轉換 Excel 失敗：' + error.message, 'error');
+            }
         }
 
         function showUploadModalStatus(message, type) {
@@ -4116,9 +4241,8 @@
             showToast('上傳已中斷', 'info');
         }
 
-        // 修改：支援 CSV 與 Excel 上傳
         async function confirmModalUpload() {
-            if (!selectedModalFile || isUploading) return;
+            if (!parsedExcelData || isUploading) return;
 
             isUploading = true;
             currentUploadController = new AbortController();
@@ -4128,29 +4252,14 @@
 
             const btn = document.getElementById('modalUploadBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;"></span>處理中...';
+            btn.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;"></span>上傳中...';
 
-            updateProgress(10, '讀取檔案...');
-
-            const fileExtension = selectedModalFile.name.substring(selectedModalFile.name.lastIndexOf('.')).toLowerCase();
-            const isExcel = fileExtension === '.xlsx' || fileExtension === '.xls';
+            updateProgress(10, '準備上傳...');
 
             try {
-                let csvContent = '';
+                updateProgress(40, '處理資料...');
                 
-                if (isExcel) {
-                    // Excel 處理流程
-                    updateProgress(30, '解析 Excel...');
-                    csvContent = await convertExcelToCsv(selectedModalFile);
-                    updateProgress(60, '轉換完成，準備上傳...');
-                } else {
-                    // CSV 處理流程（原有邏輯）
-                    csvContent = await readFileAsText(selectedModalFile);
-                    updateProgress(50, '處理中...');
-                }
-
-                // 模擬進度更新
-                let progress = isExcel ? 70 : 50;
+                let progress = 50;
                 const progressInterval = setInterval(() => {
                     if (progress < 90 && isUploading) {
                         progress += 5;
@@ -4158,8 +4267,9 @@
                     }
                 }, 500);
 
+                // 使用解析後的資料（CSV 格式）上傳
                 const result = await packingApiCall('packingUploadCSV', {
-                    data: csvContent,
+                    data: parsedExcelData,
                     sheet: currentPackingSheet
                 }, 120000);
 
@@ -4185,46 +4295,6 @@
                 document.getElementById('closeUploadModalBtn').style.display = 'block';
                 isUploading = false;
             }
-        }
-
-        // 新增：讀取 CSV 檔案為文字
-        function readFileAsText(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(new Error('檔案讀取失敗'));
-                reader.readAsText(file);
-            });
-        }
-
-        // 新增：將 Excel 轉換為 CSV
-        function convertExcelToCsv(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        
-                        // 取得第一個工作表
-                        const firstSheetName = workbook.SheetNames[0];
-                        const worksheet = workbook.Sheets[firstSheetName];
-                        
-                        // 轉換為 CSV（使用 \t 作為分隔符以支援中文內容）
-                        const csv = XLSX.utils.sheet_to_csv(worksheet, {
-                            FS: ',',  // 欄位分隔符號
-                            RS: '\n', // 列分隔符號
-                            strip: true // 去除空白
-                        });
-                        
-                        resolve(csv);
-                    } catch (err) {
-                        reject(new Error('Excel 解析失敗：' + err.message));
-                    }
-                };
-                reader.onerror = () => reject(new Error('Excel 檔案讀取失敗'));
-                reader.readAsArrayBuffer(file);
-            });
         }
 
         async function reloadCacheAfterUpload() {
