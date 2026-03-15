@@ -822,7 +822,6 @@
             opacity: 0.8;
             flex-shrink: 0;
             margin-left: 8px;
-            font-weight: 700;
         }
 
         .zone-actions {
@@ -927,7 +926,6 @@
             font-weight: 700;
             color: #333;
             flex-shrink: 0;
-            font-family: 'Courier New', monospace; /* 等寬字體顯示數字 */
         }
 
         /* Excel 風格資料表格 */
@@ -1495,11 +1493,43 @@
             color: #721c24;
         }
 
-        /* 數量顯示強化 */
-        .count-display {
-            font-family: 'Courier New', Courier, monospace;
-            font-weight: 700;
-            font-size: 1.1em;
+        /* 分頁控制樣式 */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .page-btn {
+            padding: 8px 16px;
+            border: 1px solid #dee2e6;
+            background: white;
+            color: #667eea;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-size: 14px;
+            color: #666;
+            font-weight: 600;
         }
 
         /* 響應式設計 */
@@ -1673,6 +1703,23 @@
 
         ::-webkit-scrollbar-thumb:hover {
             background: #a8a8a8;
+        }
+
+        /* 總數顯示 */
+        .total-count-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .spare-mode .total-count-badge {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
         }
     </style>
     <!-- 引入 SheetJS 函式庫 -->
@@ -1930,6 +1977,9 @@
                             <div class="block-title-left">
                                 📦 裝箱管理
                                 <span class="sheet-badge packbox" id="currentSheetBadge">PACKBOX</span>
+                                <span class="total-count-badge" id="totalCountBadge" style="display: none;">
+                                    總筆數: <span id="totalCount">0</span>
+                                </span>
                             </div>
                             <div class="block-title-actions">
                                 <button class="title-btn title-btn-primary" id="uploadFileBtn" onclick="showUploadModal()">
@@ -1948,7 +1998,7 @@
                             <div class="packing-sidebar" id="packingSidebar">
                                 <div class="zone-item active" onclick="filterZone('all', this)">
                                     <span class="zone-name">🏠 全部資料</span>
-                                    <span class="zone-count count-display" id="zoneCountAll">0 筆</span>
+                                    <span class="zone-count" id="zoneCountAll">0 筆</span>
                                 </div>
 
                                 <div id="zoneList"></div>
@@ -1976,7 +2026,7 @@
                                             <div id="zoneSummaryList">
                                                 <div class="summary-item">
                                                     <span class="summary-label">載入中...</span>
-                                                    <span class="summary-value count-display">-</span>
+                                                    <span class="summary-value">-</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -1994,7 +2044,7 @@
                                             <div id="categorySummaryList">
                                                 <div class="summary-item">
                                                     <span class="summary-label">載入中...</span>
-                                                    <span class="summary-value count-display">-</span>
+                                                    <span class="summary-value">-</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -2038,6 +2088,13 @@
                                                 <!-- 動態生成 -->
                                             </tbody>
                                         </table>
+                                    </div>
+
+                                    <!-- 分頁控制 -->
+                                    <div class="pagination" id="pagination" style="display: none;">
+                                        <button class="page-btn" id="prevPageBtn" onclick="changePage(-1)">← 上一頁</button>
+                                        <span class="page-info" id="pageInfo">第 1 頁 / 共 1 頁</span>
+                                        <button class="page-btn" id="nextPageBtn" onclick="changePage(1)">下一頁 →</button>
                                     </div>
                                 </div>
                             </div>
@@ -2154,6 +2211,13 @@
         let isUploading = false;
         let currentUploadController = null;
         let isProcessingQuickAdd = false;
+        
+        // 分頁相關
+        let currentPage = 1;
+        let totalPages = 1;
+        let pageSize = 1000;
+        let totalRecords = 0;
+        
         const MAX_LOGS = 50;
         const UPLOAD_BATCH_SIZE = 50;
 
@@ -2185,12 +2249,10 @@
                     quickAddSearch();
                 }
             });
-
-            setTimeout(preloadAllData, 1000);
         });
 
-        //================ API 呼叫函數 =================
-        function libraryApiCall(action, params = {}, timeout = 30000) {
+        //================ API 呼叫函數（增加超時時間） =================
+        function libraryApiCall(action, params = {}, timeout = 60000) {
             return new Promise((resolve, reject) => {
                 const callbackName = 'lib_cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 const script = document.createElement('script');
@@ -2229,7 +2291,7 @@
             });
         }
 
-        function packingApiCall(action, params = {}, timeout = 30000) {
+        function packingApiCall(action, params = {}, timeout = 60000) {
             return new Promise((resolve, reject) => {
                 const callbackName = 'pack_cb_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 const script = document.createElement('script');
@@ -2298,8 +2360,8 @@
 
         function switchPackingSheet(sheetName) {
             currentPackingSheet = sheetName;
-            // 切換時重置為總覽視圖，不自動展開特定位置
             currentZone = 'all';
+            currentPage = 1;
 
             document.querySelectorAll('.function-block').forEach(block => {
                 block.classList.remove('active');
@@ -2317,7 +2379,7 @@
 
             updatePanelStyle();
             loadPackingData().then(() => {
-                backToSummary(); // 確保顯示總覽而非特定位置
+                backToSummary();
             });
         }
 
@@ -2332,6 +2394,9 @@
                 title.querySelector('.block-title-left').innerHTML = `
                     🗄️ 裝箱管理
                     <span class="sheet-badge spare">PACKBOXSPARE</span>
+                    <span class="total-count-badge" id="totalCountBadge" style="display: none;">
+                        總筆數: <span id="totalCount">0</span>
+                    </span>
                 `;
                 uploadBtn.className = 'title-btn title-btn-spare';
                 if (quickAddBtn) {
@@ -2346,6 +2411,9 @@
                 title.querySelector('.block-title-left').innerHTML = `
                     📦 裝箱管理
                     <span class="sheet-badge packbox">PACKBOX</span>
+                    <span class="total-count-badge" id="totalCountBadge" style="display: none;">
+                        總筆數: <span id="totalCount">0</span>
+                    </span>
                 `;
                 uploadBtn.className = 'title-btn title-btn-primary';
                 if (quickAddBtn) {
@@ -3152,31 +3220,35 @@
             }
         }
 
-        //================ 裝箱功能 =================
-        async function preloadAllData() {
-            try {
-                const [packboxResult, spareResult] = await Promise.all([
-                    packingApiCall('packingGetAllData', { sheet: 'PACKBOX' }, 60000),
-                    packingApiCall('packingGetAllData', { sheet: 'PACKBOXSPARE' }, 60000)
-                ]);
+        //================ 裝箱功能（優化版）================
 
-                if (packboxResult.success) fullDataCache['PACKBOX'] = packboxResult.data;
-                if (spareResult.success) fullDataCache['PACKBOXSPARE'] = spareResult.data;
-            } catch (e) {
-                console.error('快取載入失敗:', e);
-            }
-        }
-
+        // 修正：載入資料時也取得總筆數
         async function loadPackingData() {
             try {
-                const [dataResult, zonesResult] = await Promise.all([
-                    packingApiCall('packingGetAllData', { sheet: currentPackingSheet }),
-                    packingApiCall('packingGetSavedZones', { sheet: currentPackingSheet })
+                // 並行載入總筆數、第一頁資料、區域列表
+                const [countResult, dataResult, zonesResult] = await Promise.all([
+                    packingApiCall('packingGetTotalCount', { sheet: currentPackingSheet }, 30000),
+                    packingApiCall('packingGetAllData', { 
+                        sheet: currentPackingSheet,
+                        page: 1,
+                        pageSize: pageSize
+                    }, 60000),
+                    packingApiCall('packingGetSavedZones', { sheet: currentPackingSheet }, 30000)
                 ]);
+
+                // 更新總筆數顯示
+                if (countResult.success) {
+                    totalRecords = countResult.total;
+                    document.getElementById('totalCount').textContent = totalRecords.toLocaleString();
+                    document.getElementById('totalCountBadge').style.display = 'inline-flex';
+                    document.getElementById('zoneCountAll').textContent = totalRecords.toLocaleString() + ' 筆';
+                }
 
                 if (dataResult.success) {
                     packingDataCache = [...dataResult.data];
-                    fullDataCache[currentPackingSheet] = dataResult.data;
+                    totalPages = dataResult.totalPages || 1;
+                    currentPage = 1;
+                    updatePagination();
                 }
 
                 if (zonesResult.success && zonesResult.zones) {
@@ -3188,13 +3260,52 @@
                 updateZoneList();
                 loadPackingSummary();
 
-                // 修正：不自動展開特定位置，保持在總覽視圖
                 if (currentZone !== 'all') {
-                    // 只有當用戶明確選擇了某個位置時才渲染該位置的資料列表
                     renderDataList(currentZone);
                 }
 
-                showToast(`已載入 ${packingDataCache.length.toLocaleString()} 筆資料`, 'success');
+            } catch (e) {
+                showToast('載入失敗：' + e.message, 'error');
+            }
+        }
+
+        function updatePagination() {
+            const paginationDiv = document.getElementById('pagination');
+            const pageInfo = document.getElementById('pageInfo');
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+
+            if (totalPages <= 1) {
+                paginationDiv.style.display = 'none';
+                return;
+            }
+
+            paginationDiv.style.display = 'flex';
+            pageInfo.textContent = `第 ${currentPage} 頁 / 共 ${totalPages} 頁 (每頁${pageSize}筆)`;
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage === totalPages;
+        }
+
+        async function changePage(direction) {
+            const newPage = currentPage + direction;
+            if (newPage < 1 || newPage > totalPages) return;
+
+            currentPage = newPage;
+            
+            try {
+                showToast(`載入第 ${currentPage} 頁...`, 'info');
+                const result = await packingApiCall('packingGetAllData', {
+                    sheet: currentPackingSheet,
+                    page: currentPage,
+                    pageSize: pageSize
+                }, 60000);
+
+                if (result.success) {
+                    packingDataCache = result.data;
+                    renderDataList(currentZone);
+                    updatePagination();
+                    showToast(`已載入第 ${currentPage} 頁`, 'success');
+                }
             } catch (e) {
                 showToast('載入失敗：' + e.message, 'error');
             }
@@ -3204,6 +3315,7 @@
             const zoneCounts = {};
             let unclassified = 0;
 
+            // 使用快取資料統計
             packingDataCache.forEach(item => {
                 const zoneValue = item.F ? String(item.F).trim() : '';
                 if (zoneValue) {
@@ -3213,6 +3325,7 @@
                 }
             });
 
+            // 合併已儲存的區域（即使沒有資料）
             const savedZonesList = savedZones[currentPackingSheet] || [];
             savedZonesList.forEach(zone => {
                 const zoneName = zone.name ? String(zone.name).trim() : '';
@@ -3220,9 +3333,6 @@
                     zoneCounts[zoneName] = 0;
                 }
             });
-
-            // 使用 toLocaleString() 格式化數字顯示（千分位）
-            document.getElementById('zoneCountAll').textContent = packingDataCache.length.toLocaleString() + ' 筆';
 
             const zoneList = document.getElementById('zoneList');
             zoneList.innerHTML = '';
@@ -3240,7 +3350,7 @@
                 div.innerHTML = `
                     <span class="zone-name">📍 ${escapeHtml(zone)}</span>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="zone-count count-display">${count.toLocaleString()} 筆</span>
+                        <span class="zone-count">${count} 筆</span>
                         <div class="zone-actions">
                             <span class="zone-edit" onclick="event.stopPropagation(); showRenameZoneModal('${escapeHtml(zone)}')" title="修改名稱">✏️</span>
                             <span class="zone-delete" onclick="event.stopPropagation(); deleteZone('${escapeHtml(zone)}')" title="刪除位置">🗑️</span>
@@ -3256,7 +3366,7 @@
                 div.onclick = function() { filterZone('', this); };
                 div.innerHTML = `
                     <span class="zone-name">📍 未分類</span>
-                    <span class="zone-count count-display">${unclassified.toLocaleString()} 筆</span>
+                    <span class="zone-count">${unclassified} 筆</span>
                 `;
                 zoneList.appendChild(div);
             }
@@ -3281,12 +3391,33 @@
                 document.getElementById('quickInputArea').style.display = 'block';
                 document.getElementById('currentZoneName').textContent = currentZone || '未分類';
                 document.getElementById('dataListTitle').textContent = (currentZone || '未分類') + ' 資料列表';
-                renderDataList(currentZone);
+                
+                // 重置到第一頁並載入該區域資料
+                currentPage = 1;
+                loadZoneData(currentZone);
+            }
+        }
+
+        // 新增：載入特定區域的分頁資料
+        async function loadZoneData(zone) {
+            try {
+                showToast('載入資料中...', 'info');
+                
+                // 這裡使用前端過濾，因為已載入的資料可能已包含該區域
+                // 如果資料量很大，建議後端增加篩選功能
+                renderDataList(zone);
+                
+                // 隱藏分頁控制（因為是前端過濾）
+                document.getElementById('pagination').style.display = 'none';
+                
+            } catch (e) {
+                showToast('載入失敗：' + e.message, 'error');
             }
         }
 
         function backToSummary() {
             currentZone = 'all';
+            currentPage = 1;
             document.querySelectorAll('.zone-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -3294,6 +3425,7 @@
             document.getElementById('packingSummary').style.display = 'block';
             document.getElementById('packingDataList').style.display = 'none';
             document.getElementById('quickInputArea').style.display = 'none';
+            updatePagination();
         }
 
         function renderDataList(zone) {
@@ -3313,7 +3445,7 @@
                             <p>此位置沒有資料</p>
                             <p style="font-size: 12px; margin-top: 10px; color: #bbb;">
                                 位置名稱：${escapeHtml(targetZone || '(空白)')}<br>
-                                快取總數：${packingDataCache.length.toLocaleString()} 筆
+                                當前頁面資料數：${packingDataCache.length} 筆
                             </p>
                         </td>
                     </tr>
@@ -3396,7 +3528,7 @@
                 const result = await packingApiCall('packingGetSummary', { 
                     sheet: currentPackingSheet,
                     groupBy: groupBy
-                });
+                }, 60000); // 增加超時時間
 
                 if (result.success) {
                     const summary = result.summary;
@@ -3404,12 +3536,13 @@
                     const zoneList = document.getElementById('zoneSummaryList');
                     zoneList.innerHTML = '';
 
+                    // 合併已儲存的區域
                     const savedZonesList = savedZones[currentPackingSheet] || [];
                     const allZones = [...summary.zones];
 
                     savedZonesList.forEach(savedZone => {
                         if (!allZones.find(z => z.name === savedZone.name)) {
-                            allZones.push({ name: savedZone.name, count: 0, countNum: 0 });
+                            allZones.push({ name: savedZone.name, count: 0 });
                         }
                     });
 
@@ -3420,7 +3553,7 @@
                     });
 
                     if (allZones.length === 0) {
-                        zoneList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value count-display">0</span></div>';
+                        zoneList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value">0</span></div>';
                     } else {
                         allZones.forEach(z => {
                             const div = document.createElement('div');
@@ -3428,7 +3561,7 @@
                             if (z.count === 0) div.style.opacity = '0.6';
                             div.innerHTML = `
                                 <span class="summary-label">${escapeHtml(z.name)}</span>
-                                <span class="summary-value count-display">${z.count.toLocaleString()} 筆</span>
+                                <span class="summary-value">${z.count.toLocaleString()} 筆</span>
                             `;
                             zoneList.appendChild(div);
                         });
@@ -3440,7 +3573,7 @@
                         div.style.color = '#856404';
                         div.innerHTML = `
                             <span class="summary-label">未分類</span>
-                            <span class="summary-value count-display">${summary.unclassified.toLocaleString()} 筆</span>
+                            <span class="summary-value">${summary.unclassified.toLocaleString()} 筆</span>
                         `;
                         zoneList.appendChild(div);
                     }
@@ -3448,24 +3581,19 @@
                     const catList = document.getElementById('categorySummaryList');
                     catList.innerHTML = '';
 
-                    // 處理分類統計
-                    const categories = summary.categories || [];
-                    if (categories.length === 0) {
-                        catList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value count-display">0</span></div>';
-                    } else {
-                        categories.forEach(cat => {
-                            const div = document.createElement('div');
-                            div.className = 'summary-item';
-                            div.innerHTML = `
-                                <span class="summary-label">${escapeHtml(cat.name)}</span>
-                                <span class="summary-value count-display">${cat.count.toLocaleString()} 筆</span>
-                            `;
-                            catList.appendChild(div);
-                        });
-                    }
+                    Object.entries(summary.categories).forEach(([name, count]) => {
+                        const div = document.createElement('div');
+                        div.className = 'summary-item';
+                        div.innerHTML = `
+                            <span class="summary-label">${escapeHtml(name)}</span>
+                            <span class="summary-value">${count.toLocaleString()} 筆</span>
+                        `;
+                        catList.appendChild(div);
+                    });
                 }
             } catch (e) {
                 console.error('載入 Summary 失敗:', e);
+                showToast('統計載入失敗：' + e.message, 'error');
             }
         }
 
@@ -3488,16 +3616,22 @@
 
             try {
                 let foundData = null;
-                const cacheData = fullDataCache[currentPackingSheet] || packingDataCache;
-                foundData = cacheData.find(item => item.A === key);
+                
+                // 先在本頁快取中尋找
+                foundData = packingDataCache.find(item => item.A === key);
 
+                // 如果沒有，查詢後端
                 if (!foundData) {
                     const result = await packingApiCall('packingGetByKey', {
                         key: key,
                         sheet: currentPackingSheet
                     });
 
-                    if (result.found) foundData = result.data;
+                    if (result.found) {
+                        foundData = result.data;
+                        // 添加到快取
+                        packingDataCache.push(foundData);
+                    }
                 }
 
                 if (foundData) {
@@ -3537,50 +3671,30 @@
             try {
                 const normalizedZone = currentZone ? String(currentZone).trim() : '';
 
+                // 更新快取
                 let targetItem = packingDataCache.find(item => item.A === key);
-
                 if (targetItem) {
                     targetItem.F = normalizedZone;
                 } else {
-                    const newItem = {
-                        A: key,
-                        B: data.B || '',
-                        C: data.C || '',
-                        D: data.D || '',
-                        E: data.E || '',
-                        F: normalizedZone
-                    };
-                    packingDataCache.push(newItem);
+                    data.F = normalizedZone;
+                    packingDataCache.push(data);
                 }
 
-                if (fullDataCache[currentPackingSheet]) {
-                    const cacheItem = fullDataCache[currentPackingSheet].find(item => item.A === key);
-                    if (cacheItem) {
-                        cacheItem.F = normalizedZone;
-                    } else {
-                        fullDataCache[currentPackingSheet].push({
-                            A: key,
-                            B: data.B || '',
-                            C: data.C || '',
-                            D: data.D || '',
-                            E: data.E || '',
-                            F: normalizedZone
-                        });
-                    }
-                }
-
+                // 更新UI
                 updateZoneList();
-                if (currentZone !== 'all') {
+                
+                // 如果當前在資料列表模式，重新渲染
+                if (currentZone !== 'all' && document.getElementById('packingDataList').style.display !== 'none') {
                     renderDataList(currentZone);
                 }
+                
                 loadPackingSummary();
 
-                packingApiCall('packingSetLocation', {
+                // 背景更新後端
+                await packingApiCall('packingSetLocation', {
                     key: key,
                     location: normalizedZone,
                     sheet: currentPackingSheet
-                }).catch(e => {
-                    console.error('API 更新失敗:', e);
                 });
 
             } catch (e) {
@@ -3648,7 +3762,6 @@
                 });
 
                 updateZoneList();
-                filterZone(zoneName, document.querySelectorAll('.zone-item')[1]);
                 showToast(`✅ 位置「${zoneName}」已新增`, 'success');
                 closeModal();
             } catch (e) {
@@ -3715,7 +3828,7 @@
             }).length;
 
             const confirmMsg = count > 0 
-                ? `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此操作將清空該位置下 ${count.toLocaleString()} 筆資料的裝箱位置（F欄），資料不會被刪除，僅移除位置標記。\n\n⚠️ 此操作無法復原！`
+                ? `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此操作將清空該位置下 ${count} 筆資料的裝箱位置（F欄），資料不會被刪除，僅移除位置標記。\n\n⚠️ 此操作無法復原！`
                 : `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此位置目前沒有資料。`;
 
             if (!confirm(confirmMsg)) return;
@@ -3729,21 +3842,13 @@
                 });
 
                 if (result.success) {
+                    // 更新前端快取
                     packingDataCache.forEach(item => {
                         const itemZone = item.F ? String(item.F).trim() : '';
                         if (itemZone === trimmedZoneName) {
                             item.F = '';
                         }
                     });
-
-                    if (fullDataCache[currentPackingSheet]) {
-                        fullDataCache[currentPackingSheet].forEach(item => {
-                            const itemZone = item.F ? String(item.F).trim() : '';
-                            if (itemZone === trimmedZoneName) {
-                                item.F = '';
-                            }
-                        });
-                    }
 
                     if (savedZones[currentPackingSheet]) {
                         savedZones[currentPackingSheet] = savedZones[currentPackingSheet].filter(z => {
@@ -3815,10 +3920,6 @@
             try {
                 const targetItem = packingDataCache.find(item => item.A === key);
                 if (targetItem) targetItem.F = '';
-                if (fullDataCache[currentPackingSheet]) {
-                    const cacheItem = fullDataCache[currentPackingSheet].find(item => item.A === key);
-                    if (cacheItem) cacheItem.F = '';
-                }
 
                 await packingApiCall('packingSetLocation', {
                     key: key,
@@ -3861,15 +3962,18 @@
             try {
                 showToast('正在清空資料...', 'info');
 
-                const result = await packingApiCall('packingClearAll', { 
+                const result = await packingApiCall('packingClearAllV2', { 
                     sheet: currentPackingSheet,
                     includeHeader: true
                 });
 
                 if (result.success) {
                     showToast('✅ ' + result.message, 'success');
-                    delete fullDataCache[currentPackingSheet];
                     packingDataCache = [];
+                    totalRecords = 0;
+                    currentPage = 1;
+                    totalPages = 1;
+                    document.getElementById('totalCount').textContent = '0';
                     updateZoneList();
                     loadPackingSummary();
 
@@ -4036,11 +4140,6 @@
             showToast('上傳已中斷', 'info');
         }
 
-        /**
-         * 分批上傳核心函數
-         * 將大量資料切成小批次（每批50筆），使用 GET (JSONP) 序列發送
-         * 避免 URL 過長與 POST 跨域限制
-         */
         async function confirmModalUpload() {
             if (!selectedModalFile || isUploading) return;
 
@@ -4082,12 +4181,10 @@
                 });
 
                 const totalRecords = normalizedData.length;
-                
                 const BATCH_SIZE = UPLOAD_BATCH_SIZE;
                 const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
                 let totalUpdated = 0;
                 let totalInserted = 0;
-                let totalProcessed = 0;
                 let failedBatches = [];
                 let currentBatch = 0;
 
@@ -4100,7 +4197,7 @@
                     const batchData = normalizedData.slice(i, i + BATCH_SIZE);
                     const progressPercent = 10 + Math.floor((currentBatch / totalBatches) * 85);
                     
-                    updateProgress(progressPercent, `上傳第 ${currentBatch}/${totalBatches} 批 (${batchData.length.toLocaleString()} 筆)...`);
+                    updateProgress(progressPercent, `上傳第 ${currentBatch}/${totalBatches} 批 (${batchData.length} 筆)...`);
                     btn.innerHTML = `<span style="display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>第 ${currentBatch}/${totalBatches} 批...`;
 
                     try {
@@ -4112,14 +4209,11 @@
                         if (result.success) {
                             totalUpdated += (result.updated || 0);
                             totalInserted += (result.inserted || 0);
-                            totalProcessed += (result.processed || batchData.length);
                         } else {
                             failedBatches.push({ batch: currentBatch, error: result.error || '未知錯誤' });
-                            console.error(`批次 ${currentBatch} 失敗:`, result.error);
                         }
                     } catch (e) {
                         failedBatches.push({ batch: currentBatch, error: e.message });
-                        console.error(`批次 ${currentBatch} 錯誤:`, e);
                     }
 
                     if (i + BATCH_SIZE < totalRecords) {
@@ -4130,18 +4224,18 @@
                 updateProgress(100, '完成！');
 
                 if (failedBatches.length > 0) {
-                    const errorDetails = failedBatches.map(f => `第${f.batch}批: ${f.error.substring(0, 30)}`).join('<br>');
                     showUploadModalStatus(
-                        `⚠️ 部分批次失敗<br>成功: ${totalProcessed.toLocaleString()}/${totalRecords.toLocaleString()} 筆<br>更新: ${totalUpdated.toLocaleString()} | 新增: ${totalInserted.toLocaleString()}<br>失敗: ${failedBatches.length} 批<br><small>${errorDetails}</small>`, 
+                        `⚠️ 部分批次失敗<br>成功: ${totalUpdated + totalInserted}/${totalRecords} 筆<br>更新: ${totalUpdated} | 新增: ${totalInserted}<br>失敗: ${failedBatches.length} 批`, 
                         'warning'
                     );
                 } else {
                     showUploadModalStatus(
-                        `✅ 全部上傳成功！<br>總筆數: ${totalRecords.toLocaleString()}<br>更新: ${totalUpdated.toLocaleString()} 筆 | 新增: ${totalInserted.toLocaleString()} 筆`, 
+                        `✅ 全部上傳成功！<br>總筆數: ${totalRecords}<br>更新: ${totalUpdated} 筆 | 新增: ${totalInserted} 筆`, 
                         'success'
                     );
                 }
 
+                // 修正：不自動切換到 F 欄位，只重新載入資料
                 setTimeout(() => {
                     closeUploadModal();
                     reloadCacheAfterUpload();
@@ -4165,20 +4259,25 @@
             }
         }
 
-        // 修正：上傳後不自動展開特定位置，保持在總覽視圖
         async function reloadCacheAfterUpload() {
             isUploading = false;
             currentUploadController = null;
-            showToast('正在更新資料快取...', 'info');
-            delete fullDataCache[currentPackingSheet];
+            showToast('正在更新資料...', 'info');
             
-            // 重新載入資料，但保持在總覽視圖（不自動切換到特定位置）
-            currentZone = 'all'; // 確保回到總覽
+            // 修正：回到總覽頁面，不自動開啟特定區域
+            currentZone = 'all';
+            currentPage = 1;
+            
+            // 清除相關快取
+            fullDataCache = {};
+            
             await loadPackingData();
-            backToSummary(); // 明確返回總覽視圖
+            backToSummary();
+            
+            showToast('資料更新完成', 'success');
         }
 
-        // 修正：使用後端新版的 Export URL 方法匯出 Excel
+        // 修正：Excel 匯出功能
         async function exportPackingExcel() {
             const btn = event.target;
             const originalText = btn.innerHTML;
@@ -4188,10 +4287,10 @@
             try {
                 const result = await packingApiCall('packingExportExcel', {
                     sheet: currentPackingSheet
-                }, 60000); // 給予較長超時時間
+                }, 60000);
 
                 if (result.success && result.data) {
-                    // 將 Base64 轉換為 Blob
+                    // 解碼 Base64 並下載
                     const byteCharacters = atob(result.data);
                     const byteNumbers = new Array(byteCharacters.length);
                     for (let i = 0; i < byteCharacters.length; i++) {
@@ -4200,7 +4299,6 @@
                     const byteArray = new Uint8Array(byteNumbers);
                     const blob = new Blob([byteArray], { type: result.mimeType });
                     
-                    // 建立下載連結
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(blob);
                     link.download = result.filename;
@@ -4209,13 +4307,12 @@
                     document.body.removeChild(link);
                     URL.revokeObjectURL(link.href);
                     
-                    showToast(`✅ Excel匯出成功（共 ${result.recordCount ? result.recordCount.toLocaleString() : ''} 筆）`, 'success');
+                    showToast(`✅ Excel匯出成功（共 ${result.totalRows || 0} 筆）`, 'success');
                 } else {
                     throw new Error(result.error || '匯出失敗');
                 }
             } catch (e) {
                 showToast('❌ 匯出失敗：' + e.message, 'error');
-                console.error('匯出錯誤:', e);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
