@@ -822,6 +822,7 @@
             opacity: 0.8;
             flex-shrink: 0;
             margin-left: 8px;
+            font-weight: 700;
         }
 
         .zone-actions {
@@ -926,6 +927,7 @@
             font-weight: 700;
             color: #333;
             flex-shrink: 0;
+            font-family: 'Courier New', monospace; /* 等寬字體顯示數字 */
         }
 
         /* Excel 風格資料表格 */
@@ -1493,6 +1495,13 @@
             color: #721c24;
         }
 
+        /* 數量顯示強化 */
+        .count-display {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+
         /* 響應式設計 */
         @media (max-width: 968px) {
             .main-wrapper {
@@ -1939,7 +1948,7 @@
                             <div class="packing-sidebar" id="packingSidebar">
                                 <div class="zone-item active" onclick="filterZone('all', this)">
                                     <span class="zone-name">🏠 全部資料</span>
-                                    <span class="zone-count" id="zoneCountAll">0 筆</span>
+                                    <span class="zone-count count-display" id="zoneCountAll">0 筆</span>
                                 </div>
 
                                 <div id="zoneList"></div>
@@ -1967,7 +1976,7 @@
                                             <div id="zoneSummaryList">
                                                 <div class="summary-item">
                                                     <span class="summary-label">載入中...</span>
-                                                    <span class="summary-value">-</span>
+                                                    <span class="summary-value count-display">-</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -1985,7 +1994,7 @@
                                             <div id="categorySummaryList">
                                                 <div class="summary-item">
                                                     <span class="summary-label">載入中...</span>
-                                                    <span class="summary-value">-</span>
+                                                    <span class="summary-value count-display">-</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -2143,10 +2152,10 @@
         let modalCallback = null;
         let selectedModalFile = null;
         let isUploading = false;
-        let currentUploadController = null; // 用於中斷分批上傳
+        let currentUploadController = null;
         let isProcessingQuickAdd = false;
         const MAX_LOGS = 50;
-        const UPLOAD_BATCH_SIZE = 50; // 分批大小：每批50筆，避免GET URL過長
+        const UPLOAD_BATCH_SIZE = 50;
 
         //================ 初始化 =================
         document.addEventListener('DOMContentLoaded', function() {
@@ -2289,6 +2298,7 @@
 
         function switchPackingSheet(sheetName) {
             currentPackingSheet = sheetName;
+            // 切換時重置為總覽視圖，不自動展開特定位置
             currentZone = 'all';
 
             document.querySelectorAll('.function-block').forEach(block => {
@@ -2307,7 +2317,7 @@
 
             updatePanelStyle();
             loadPackingData().then(() => {
-                backToSummary();
+                backToSummary(); // 確保顯示總覽而非特定位置
             });
         }
 
@@ -3178,11 +3188,13 @@
                 updateZoneList();
                 loadPackingSummary();
 
+                // 修正：不自動展開特定位置，保持在總覽視圖
                 if (currentZone !== 'all') {
+                    // 只有當用戶明確選擇了某個位置時才渲染該位置的資料列表
                     renderDataList(currentZone);
                 }
 
-                showToast(`已載入 ${packingDataCache.length} 筆資料`, 'success');
+                showToast(`已載入 ${packingDataCache.length.toLocaleString()} 筆資料`, 'success');
             } catch (e) {
                 showToast('載入失敗：' + e.message, 'error');
             }
@@ -3209,7 +3221,8 @@
                 }
             });
 
-            document.getElementById('zoneCountAll').textContent = packingDataCache.length + ' 筆';
+            // 使用 toLocaleString() 格式化數字顯示（千分位）
+            document.getElementById('zoneCountAll').textContent = packingDataCache.length.toLocaleString() + ' 筆';
 
             const zoneList = document.getElementById('zoneList');
             zoneList.innerHTML = '';
@@ -3227,7 +3240,7 @@
                 div.innerHTML = `
                     <span class="zone-name">📍 ${escapeHtml(zone)}</span>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="zone-count">${count} 筆</span>
+                        <span class="zone-count count-display">${count.toLocaleString()} 筆</span>
                         <div class="zone-actions">
                             <span class="zone-edit" onclick="event.stopPropagation(); showRenameZoneModal('${escapeHtml(zone)}')" title="修改名稱">✏️</span>
                             <span class="zone-delete" onclick="event.stopPropagation(); deleteZone('${escapeHtml(zone)}')" title="刪除位置">🗑️</span>
@@ -3243,7 +3256,7 @@
                 div.onclick = function() { filterZone('', this); };
                 div.innerHTML = `
                     <span class="zone-name">📍 未分類</span>
-                    <span class="zone-count">${unclassified} 筆</span>
+                    <span class="zone-count count-display">${unclassified.toLocaleString()} 筆</span>
                 `;
                 zoneList.appendChild(div);
             }
@@ -3300,7 +3313,7 @@
                             <p>此位置沒有資料</p>
                             <p style="font-size: 12px; margin-top: 10px; color: #bbb;">
                                 位置名稱：${escapeHtml(targetZone || '(空白)')}<br>
-                                快取總數：${packingDataCache.length} 筆
+                                快取總數：${packingDataCache.length.toLocaleString()} 筆
                             </p>
                         </td>
                     </tr>
@@ -3396,7 +3409,7 @@
 
                     savedZonesList.forEach(savedZone => {
                         if (!allZones.find(z => z.name === savedZone.name)) {
-                            allZones.push({ name: savedZone.name, count: 0 });
+                            allZones.push({ name: savedZone.name, count: 0, countNum: 0 });
                         }
                     });
 
@@ -3407,7 +3420,7 @@
                     });
 
                     if (allZones.length === 0) {
-                        zoneList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value">0</span></div>';
+                        zoneList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value count-display">0</span></div>';
                     } else {
                         allZones.forEach(z => {
                             const div = document.createElement('div');
@@ -3415,7 +3428,7 @@
                             if (z.count === 0) div.style.opacity = '0.6';
                             div.innerHTML = `
                                 <span class="summary-label">${escapeHtml(z.name)}</span>
-                                <span class="summary-value">${z.count} 筆</span>
+                                <span class="summary-value count-display">${z.count.toLocaleString()} 筆</span>
                             `;
                             zoneList.appendChild(div);
                         });
@@ -3427,7 +3440,7 @@
                         div.style.color = '#856404';
                         div.innerHTML = `
                             <span class="summary-label">未分類</span>
-                            <span class="summary-value">${summary.unclassified} 筆</span>
+                            <span class="summary-value count-display">${summary.unclassified.toLocaleString()} 筆</span>
                         `;
                         zoneList.appendChild(div);
                     }
@@ -3435,15 +3448,21 @@
                     const catList = document.getElementById('categorySummaryList');
                     catList.innerHTML = '';
 
-                    Object.entries(summary.categories).forEach(([name, count]) => {
-                        const div = document.createElement('div');
-                        div.className = 'summary-item';
-                        div.innerHTML = `
-                            <span class="summary-label">${escapeHtml(name)}</span>
-                            <span class="summary-value">${count} 筆</span>
-                        `;
-                        catList.appendChild(div);
-                    });
+                    // 處理分類統計
+                    const categories = summary.categories || [];
+                    if (categories.length === 0) {
+                        catList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value count-display">0</span></div>';
+                    } else {
+                        categories.forEach(cat => {
+                            const div = document.createElement('div');
+                            div.className = 'summary-item';
+                            div.innerHTML = `
+                                <span class="summary-label">${escapeHtml(cat.name)}</span>
+                                <span class="summary-value count-display">${cat.count.toLocaleString()} 筆</span>
+                            `;
+                            catList.appendChild(div);
+                        });
+                    }
                 }
             } catch (e) {
                 console.error('載入 Summary 失敗:', e);
@@ -3696,7 +3715,7 @@
             }).length;
 
             const confirmMsg = count > 0 
-                ? `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此操作將清空該位置下 ${count} 筆資料的裝箱位置（F欄），資料不會被刪除，僅移除位置標記。\n\n⚠️ 此操作無法復原！`
+                ? `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此操作將清空該位置下 ${count.toLocaleString()} 筆資料的裝箱位置（F欄），資料不會被刪除，僅移除位置標記。\n\n⚠️ 此操作無法復原！`
                 : `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此位置目前沒有資料。`;
 
             if (!confirm(confirmMsg)) return;
@@ -3871,7 +3890,7 @@
             }
         }
 
-        //================ Excel 上傳與匯出功能（含分批上傳機制） =================
+        //================ Excel 上傳與匯出功能 =================
         function showUploadModal() {
             if (isUploading) {
                 showToast('⚠️ 正在上傳中，請等待完成或中斷', 'warning');
@@ -4026,7 +4045,6 @@
             if (!selectedModalFile || isUploading) return;
 
             isUploading = true;
-            // 建立簡易中斷控制器
             currentUploadController = { aborted: false };
 
             document.getElementById('cancelUploadBtn').style.display = 'block';
@@ -4036,7 +4054,6 @@
             btn.disabled = true;
 
             try {
-                // 解析 Excel（與之前相同）
                 updateProgress(5, '讀取Excel檔案...');
                 const data = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -4051,13 +4068,11 @@
                 const worksheet = workbook.Sheets[firstSheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
 
-                // 過濾有效資料（確保A欄有值）
                 const validData = jsonData.filter(row => row[0] && String(row[0]).trim() !== '');
                 if (validData.length === 0) {
                     throw new Error('Excel中沒有有效資料（請確保A欄有Key值）');
                 }
 
-                // 標準化資料：確保每筆都是6欄（A-F）
                 const normalizedData = validData.map(row => {
                     const newRow = new Array(6).fill('');
                     for (let i = 0; i < Math.min(row.length, 6); i++) {
@@ -4068,8 +4083,7 @@
 
                 const totalRecords = normalizedData.length;
                 
-                // 分批處理設定
-                const BATCH_SIZE = UPLOAD_BATCH_SIZE; // 每批50筆
+                const BATCH_SIZE = UPLOAD_BATCH_SIZE;
                 const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
                 let totalUpdated = 0;
                 let totalInserted = 0;
@@ -4077,7 +4091,6 @@
                 let failedBatches = [];
                 let currentBatch = 0;
 
-                // 序列處理每一批（避免並發導致GAS超時或鎖定）
                 for (let i = 0; i < totalRecords; i += BATCH_SIZE) {
                     if (currentUploadController.aborted) {
                         throw new Error('使用者中斷');
@@ -4085,17 +4098,16 @@
 
                     currentBatch++;
                     const batchData = normalizedData.slice(i, i + BATCH_SIZE);
-                    const progressPercent = 10 + Math.floor((currentBatch / totalBatches) * 85); // 10% ~ 95%
+                    const progressPercent = 10 + Math.floor((currentBatch / totalBatches) * 85);
                     
-                    updateProgress(progressPercent, `上傳第 ${currentBatch}/${totalBatches} 批 (${batchData.length} 筆)...`);
+                    updateProgress(progressPercent, `上傳第 ${currentBatch}/${totalBatches} 批 (${batchData.length.toLocaleString()} 筆)...`);
                     btn.innerHTML = `<span style="display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>第 ${currentBatch}/${totalBatches} 批...`;
 
                     try {
-                        // 使用 GET 請求發送此批次（JSONP方式，避免跨域）
                         const result = await packingApiCall('packingUploadData', {
                             data: JSON.stringify(batchData),
                             sheet: currentPackingSheet
-                        }, 60000); // 60秒超時
+                        }, 60000);
 
                         if (result.success) {
                             totalUpdated += (result.updated || 0);
@@ -4110,7 +4122,6 @@
                         console.error(`批次 ${currentBatch} 錯誤:`, e);
                     }
 
-                    // 批次間延遲，避免請求過於頻繁（500ms）
                     if (i + BATCH_SIZE < totalRecords) {
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
@@ -4118,21 +4129,19 @@
 
                 updateProgress(100, '完成！');
 
-                // 顯示最終結果
                 if (failedBatches.length > 0) {
                     const errorDetails = failedBatches.map(f => `第${f.batch}批: ${f.error.substring(0, 30)}`).join('<br>');
                     showUploadModalStatus(
-                        `⚠️ 部分批次失敗<br>成功: ${totalProcessed}/${totalRecords} 筆<br>更新: ${totalUpdated} | 新增: ${totalInserted}<br>失敗: ${failedBatches.length} 批<br><small>${errorDetails}</small>`, 
+                        `⚠️ 部分批次失敗<br>成功: ${totalProcessed.toLocaleString()}/${totalRecords.toLocaleString()} 筆<br>更新: ${totalUpdated.toLocaleString()} | 新增: ${totalInserted.toLocaleString()}<br>失敗: ${failedBatches.length} 批<br><small>${errorDetails}</small>`, 
                         'warning'
                     );
                 } else {
                     showUploadModalStatus(
-                        `✅ 全部上傳成功！<br>總筆數: ${totalRecords}<br>更新: ${totalUpdated} 筆 | 新增: ${totalInserted} 筆`, 
+                        `✅ 全部上傳成功！<br>總筆數: ${totalRecords.toLocaleString()}<br>更新: ${totalUpdated.toLocaleString()} 筆 | 新增: ${totalInserted.toLocaleString()} 筆`, 
                         'success'
                     );
                 }
 
-                // 延遲關閉並刷新資料
                 setTimeout(() => {
                     closeUploadModal();
                     reloadCacheAfterUpload();
@@ -4156,28 +4165,20 @@
             }
         }
 
-        // 修正：上傳完成後不自動開啟特定位置，而是返回總覽
+        // 修正：上傳後不自動展開特定位置，保持在總覽視圖
         async function reloadCacheAfterUpload() {
             isUploading = false;
             currentUploadController = null;
             showToast('正在更新資料快取...', 'info');
-            
-            // 清除快取強制重新載入
             delete fullDataCache[currentPackingSheet];
             
-            // 重置當前區域為全部
-            currentZone = 'all';
-            
-            // 重新載入資料
+            // 重新載入資料，但保持在總覽視圖（不自動切換到特定位置）
+            currentZone = 'all'; // 確保回到總覽
             await loadPackingData();
-            
-            // 確保顯示總覽頁面（不自動展開特定位置）
-            backToSummary();
-            
-            showToast('✅ 資料已更新並返回總覽', 'success');
+            backToSummary(); // 明確返回總覽視圖
         }
 
-        // Excel 匯出功能
+        // 修正：使用後端新版的 Export URL 方法匯出 Excel
         async function exportPackingExcel() {
             const btn = event.target;
             const originalText = btn.innerHTML;
@@ -4187,9 +4188,10 @@
             try {
                 const result = await packingApiCall('packingExportExcel', {
                     sheet: currentPackingSheet
-                });
+                }, 60000); // 給予較長超時時間
 
                 if (result.success && result.data) {
+                    // 將 Base64 轉換為 Blob
                     const byteCharacters = atob(result.data);
                     const byteNumbers = new Array(byteCharacters.length);
                     for (let i = 0; i < byteCharacters.length; i++) {
@@ -4198,6 +4200,7 @@
                     const byteArray = new Uint8Array(byteNumbers);
                     const blob = new Blob([byteArray], { type: result.mimeType });
                     
+                    // 建立下載連結
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(blob);
                     link.download = result.filename;
@@ -4206,12 +4209,13 @@
                     document.body.removeChild(link);
                     URL.revokeObjectURL(link.href);
                     
-                    showToast(`✅ Excel匯出成功（共 ${result.totalRows || '未知'} 筆）`, 'success');
+                    showToast(`✅ Excel匯出成功（共 ${result.recordCount ? result.recordCount.toLocaleString() : ''} 筆）`, 'success');
                 } else {
                     throw new Error(result.error || '匯出失敗');
                 }
             } catch (e) {
                 showToast('❌ 匯出失敗：' + e.message, 'error');
+                console.error('匯出錯誤:', e);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
