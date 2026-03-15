@@ -2086,7 +2086,9 @@
             <h3 id="uploadModalTitle" style="text-align: left;">📤 上傳 CSV 檔案</h3>
 
             <div class="upload-modal-content">
-                <input type="file" id="modalFileInput" accept=".csv" onchange="handleModalFileSelect(event)" style="display: none;">
+                <!-- 新版（CSV + Excel） -->
+<input type="file" id="fileInput" accept=".csv, .xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+       
                 <label for="modalFileInput" class="upload-area" id="modalUploadArea" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; margin: 20px 0;">
                     <div class="upload-icon">📁</div>
                     <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">點擊選擇 CSV 檔案</div>
