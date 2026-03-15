@@ -1223,6 +1223,34 @@
             display: block;
         }
 
+        .batch-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 13px;
+            color: #666;
+            border-left: 3px solid #667eea;
+        }
+
+        .batch-info.spare-mode {
+            border-left-color: #11998e;
+        }
+
+        .batch-stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 3px 0;
+            border-bottom: 1px dashed #e0e0e0;
+        }
+
+        .batch-stat:last-child {
+            border-bottom: none;
+            font-weight: 600;
+            color: #333;
+        }
+
         input[type="file"] {
             display: none;
         }
@@ -2011,7 +2039,7 @@
                                         <button class="btn-primary btn-sm" onclick="searchPackingData()">🔍 搜尋</button>
                                     </div>
 
-                                    <!-- Excel 風格表格容器 -->
+                                    <!-- Excel 風格資料表格容器 -->
                                     <div class="excel-table-container" id="excelTableContainer">
                                         <table class="excel-table" id="excelDataTable">
                                             <thead>
@@ -2085,7 +2113,7 @@
         </div>
     </div>
 
-    <!-- Upload Modal -->
+    <!-- Upload Modal - 分批上傳版 -->
     <div class="modal-overlay upload-modal-overlay" id="uploadModalOverlay" onclick="closeUploadModal(event)">
         <div class="modal" onclick="event.stopPropagation()" style="text-align: center;">
             <h3 id="uploadModalTitle" style="text-align: left;">📤 上傳 Excel 檔案</h3>
@@ -2098,12 +2126,42 @@
                     <div class="upload-hint" style="font-size: 13px; color: #888; line-height: 1.6;">
                         支援格式：.xlsx, .xls<br>
                         A-F欄位對應：A=Key, B-E=資料, F=位置<br>
+                        自動分批上傳（每批500筆）<br>
                         檔案大小限制：5MB
                     </div>
                 </label>
 
                 <div id="uploadFileInfo" style="display: none; margin: 15px 0; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #28a745; text-align: left;">
                     <div style="font-weight: 600; color: #2e7d32; font-size: 14px;">✅ 已選擇檔案：<span id="selectedFileName"></span></div>
+                    <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                        資料筆數：<span id="totalRows">0</span> 筆 | 
+                        預計分批：<span id="batchCount">0</span> 批
+                    </div>
+                </div>
+
+                <!-- 分批統計資訊 -->
+                <div class="batch-info" id="batchInfo" style="display: none;">
+                    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">📊 上傳進度統計</div>
+                    <div class="batch-stat">
+                        <span>已完成批次：</span>
+                        <span id="completedBatches">0 / 0</span>
+                    </div>
+                    <div class="batch-stat">
+                        <span>成功更新：</span>
+                        <span id="totalUpdated">0 筆</span>
+                    </div>
+                    <div class="batch-stat">
+                        <span>成功新增：</span>
+                        <span id="totalInserted">0 筆</span>
+                    </div>
+                    <div class="batch-stat">
+                        <span>處理總數：</span>
+                        <span id="totalProcessed">0 / 0 筆</span>
+                    </div>
+                    <div class="batch-stat">
+                        <span>當前狀態：</span>
+                        <span id="currentBatchStatus" style="color: #667eea; font-weight: 600;">等待開始</span>
+                    </div>
                 </div>
 
                 <div class="upload-progress-container" id="uploadProgressContainer">
@@ -2126,6 +2184,9 @@
         //================ API 設定 =================
         const LIBRARY_API_URL = 'https://script.google.com/macros/s/AKfycbx2EQpxNM4E4Ab4vT2XPmG90CpxdbrVMzbS9Ssx6fcc6bF_A0jMav3WEjoaTt50NEeGxg/exec';
         const PACKING_API_URL = 'https://script.google.com/macros/s/AKfycbx2EQpxNM4E4Ab4vT2XPmG90CpxdbrVMzbS9Ssx6fcc6bF_A0jMav3WEjoaTt50NEeGxg/exec';
+
+        //================ 分批上傳設定 =================
+        const BATCH_UPLOAD_SIZE = 500; // 每批上傳筆數，與GAS的BATCH_SIZE對應
 
         //================ 狀態變數 =================
         let currentPanel = 'search';
@@ -3870,7 +3931,7 @@
             }
         }
 
-        //================ Excel 上傳與匯出功能 =================
+        //================ Excel 分批上傳功能 =================
         function showUploadModal() {
             if (isUploading) {
                 showToast('⚠️ 正在上傳中，請等待完成或中斷', 'warning');
@@ -3881,6 +3942,23 @@
             document.getElementById('modalFileInput').value = '';
             document.getElementById('uploadFileInfo').style.display = 'none';
             document.getElementById('selectedFileName').textContent = '';
+            document.getElementById('totalRows').textContent = '0';
+            document.getElementById('batchCount').textContent = '0';
+
+            // 重置分批統計
+            document.getElementById('batchInfo').style.display = 'none';
+            document.getElementById('completedBatches').textContent = '0 / 0';
+            document.getElementById('totalUpdated').textContent = '0 筆';
+            document.getElementById('totalInserted').textContent = '0 筆';
+            document.getElementById('totalProcessed').textContent = '0 / 0 筆';
+            document.getElementById('currentBatchStatus').textContent = '等待開始';
+            if (currentPackingSheet === 'PACKBOXSPARE') {
+                document.getElementById('currentBatchStatus').style.color = '#11998e';
+                document.getElementById('batchInfo').classList.add('spare-mode');
+            } else {
+                document.getElementById('currentBatchStatus').style.color = '#667eea';
+                document.getElementById('batchInfo').classList.remove('spare-mode');
+            }
 
             document.getElementById('uploadProgressContainer').classList.remove('active');
             document.getElementById('uploadProgressBar').style.width = '0%';
@@ -3907,6 +3985,7 @@
                 <div class="upload-hint" style="font-size: 13px; color: #888; line-height: 1.6;">
                     支援格式：.xlsx, .xls<br>
                     A-F欄位對應：A=Key, B-E=資料, F=位置<br>
+                    自動分批上傳（每批${BATCH_UPLOAD_SIZE}筆）<br>
                     檔案大小限制：5MB
                 </div>
             `;
@@ -3956,8 +4035,33 @@
             }
 
             selectedModalFile = file;
+            
+            // 預讀取檔案計算筆數
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    
+                    const validData = jsonData.filter(row => row[0] && String(row[0]).trim() !== '');
+                    const totalRows = validData.length;
+                    const batchCount = Math.ceil(totalRows / BATCH_UPLOAD_SIZE);
+                    
+                    document.getElementById('totalRows').textContent = totalRows;
+                    document.getElementById('batchCount').textContent = batchCount;
+                    document.getElementById('uploadFileInfo').style.display = 'block';
+                } catch (err) {
+                    console.error('預讀取失敗:', err);
+                    document.getElementById('totalRows').textContent = '未知';
+                    document.getElementById('batchCount').textContent = '未知';
+                    document.getElementById('uploadFileInfo').style.display = 'block';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+
             document.getElementById('selectedFileName').textContent = file.name;
-            document.getElementById('uploadFileInfo').style.display = 'block';
             document.getElementById('modalUploadBtn').disabled = false;
 
             const uploadArea = document.getElementById('modalUploadArea');
@@ -3999,6 +4103,15 @@
             if (statusText) statusTextEl.textContent = statusText;
         }
 
+        function updateBatchStatsUI(completed, total, updated, inserted, processed, currentStatus) {
+            document.getElementById('completedBatches').textContent = `${completed} / ${total}`;
+            document.getElementById('totalUpdated').textContent = `${updated} 筆`;
+            document.getElementById('totalInserted').textContent = `${inserted} 筆`;
+            document.getElementById('totalProcessed').textContent = `${processed} 筆`;
+            document.getElementById('currentBatchStatus').textContent = currentStatus;
+            document.getElementById('batchInfo').style.display = 'block';
+        }
+
         function cancelUpload() {
             if (currentUploadController) {
                 currentUploadController.abort();
@@ -4013,10 +4126,12 @@
             document.getElementById('modalUploadBtn').innerHTML = '🚀 開始上傳';
 
             updateProgress(0, '已中斷');
+            document.getElementById('currentBatchStatus').textContent = '已中斷';
             showUploadModalStatus('⛔ 上傳已中斷', 'error');
             showToast('上傳已中斷', 'info');
         }
 
+        // ===== 分批上傳核心功能 =====
         async function confirmModalUpload() {
             if (!selectedModalFile || isUploading) return;
 
@@ -4025,14 +4140,16 @@
 
             document.getElementById('cancelUploadBtn').style.display = 'block';
             document.getElementById('closeUploadModalBtn').style.display = 'none';
+            document.getElementById('uploadFileInfo').style.display = 'none';
 
             const btn = document.getElementById('modalUploadBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;"></span>解析中...';
+            btn.innerHTML = '<span style="display: inline-block; width: 20px; height: 20px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;"></span>讀取中...';
 
-            updateProgress(10, '讀取Excel檔案...');
+            updateProgress(5, '正在讀取Excel檔案...');
 
             try {
+                // 1. 讀取並解析Excel
                 const data = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
@@ -4040,7 +4157,9 @@
                     reader.readAsArrayBuffer(selectedModalFile);
                 });
 
-                updateProgress(30, '解析Excel資料...');
+                if (currentUploadController.signal.aborted) throw new Error('已中斷');
+
+                updateProgress(10, '解析Excel資料...');
 
                 const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
                 const firstSheetName = workbook.SheetNames[0];
@@ -4051,14 +4170,16 @@
                     defval: ''
                 });
 
-                updateProgress(50, '上傳資料中...');
+                if (currentUploadController.signal.aborted) throw new Error('已中斷');
 
+                // 2. 過濾並格式化資料
                 const validData = jsonData.filter(row => row[0] && String(row[0]).trim() !== '');
                 
                 if (validData.length === 0) {
                     throw new Error('Excel中沒有有效資料（請確保A欄有Key值）');
                 }
 
+                // 格式化為A-F欄位
                 const normalizedData = validData.map(row => {
                     const newRow = new Array(6).fill('');
                     for (let i = 0; i < Math.min(row.length, 6); i++) {
@@ -4067,29 +4188,105 @@
                     return newRow;
                 });
 
-                updateProgress(70, '處理資料中...');
+                // 3. 分批處理
+                const totalRows = normalizedData.length;
+                const totalBatches = Math.ceil(totalRows / BATCH_UPLOAD_SIZE);
+                let completedBatches = 0;
+                let totalUpdated = 0;
+                let totalInserted = 0;
+                let totalProcessed = 0;
 
-                const result = await packingApiCall('packingUploadData', {
-                    data: JSON.stringify(normalizedData),
-                    sheet: currentPackingSheet
-                }, 120000);
+                updateProgress(15, `準備分批上傳，共 ${totalBatches} 批...`);
+                updateBatchStatsUI(0, totalBatches, 0, 0, 0, '開始分批上傳');
 
-                updateProgress(100, '完成！');
+                // 逐批上傳
+                for (let i = 0; i < totalBatches; i++) {
+                    if (currentUploadController.signal.aborted) {
+                        throw new Error('已中斷');
+                    }
 
-                if (result.success) {
-                    showUploadModalStatus(`✅ 成功上傳 ${normalizedData.length} 筆資料`, 'success');
-                    setTimeout(() => {
-                        closeUploadModal();
-                        reloadCacheAfterUpload();
-                    }, 1500);
-                } else {
-                    throw new Error(result.error || '上傳失敗');
+                    const start = i * BATCH_UPLOAD_SIZE;
+                    const end = Math.min(start + BATCH_UPLOAD_SIZE, totalRows);
+                    const batchData = normalizedData.slice(start, end);
+                    const currentBatchNum = i + 1;
+
+                    // 更新UI狀態
+                    const progressPercent = 15 + Math.floor((currentBatchNum / totalBatches) * 80);
+                    updateProgress(progressPercent, `正在上傳第 ${currentBatchNum}/${totalBatches} 批（${batchData.length} 筆）...`);
+                    updateBatchStatsUI(
+                        completedBatches, 
+                        totalBatches, 
+                        totalUpdated, 
+                        totalInserted, 
+                        totalProcessed,
+                        `正在處理第 ${currentBatchNum} 批...`
+                    );
+
+                    // 發送API請求
+                    try {
+                        const result = await packingApiCall('packingUploadData', {
+                            data: JSON.stringify(batchData),
+                            sheet: currentPackingSheet
+                        }, 60000); // 每批超時60秒
+
+                        if (!result.success) {
+                            throw new Error(`第 ${currentBatchNum} 批失敗：${result.error || '未知錯誤'}`);
+                        }
+
+                        // 累積統計
+                        totalUpdated += result.updated || 0;
+                        totalInserted += result.inserted || 0;
+                        totalProcessed += result.processed || batchData.length;
+                        completedBatches++;
+
+                        updateBatchStatsUI(
+                            completedBatches, 
+                            totalBatches, 
+                            totalUpdated, 
+                            totalInserted, 
+                            totalProcessed,
+                            `第 ${currentBatchNum} 批完成（更新${result.updated || 0}，新增${result.inserted || 0}）`
+                        );
+
+                    } catch (batchError) {
+                        throw new Error(`第 ${currentBatchNum}/${totalBatches} 批上傳失敗：${batchError.message}`);
+                    }
+
+                    // 小延遲避免伺服器過載
+                    if (i < totalBatches - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
                 }
 
+                // 4. 完成處理
+                updateProgress(100, '完成！');
+                updateBatchStatsUI(
+                    totalBatches, 
+                    totalBatches, 
+                    totalUpdated, 
+                    totalInserted, 
+                    totalProcessed,
+                    '✅ 全部完成'
+                );
+
+                showUploadModalStatus(
+                    `✅ 分批上傳完成！共處理 ${totalRows} 筆（更新 ${totalUpdated} 筆，新增 ${totalInserted} 筆）`, 
+                    'success'
+                );
+
+                // 延遲關閉並刷新
+                setTimeout(() => {
+                    closeUploadModal();
+                    reloadCacheAfterUpload();
+                }, 2000);
+
             } catch (e) {
-                if (e.name === 'AbortError') return;
+                if (e.name === 'AbortError' || e.message === '已中斷') return;
+                
                 updateProgress(0, '上傳失敗');
+                document.getElementById('currentBatchStatus').textContent = '失敗';
                 showUploadModalStatus('❌ ' + e.message, 'error');
+                
                 btn.disabled = false;
                 btn.innerHTML = '🚀 開始上傳';
                 document.getElementById('cancelUploadBtn').style.display = 'none';
@@ -4106,7 +4303,7 @@
             await loadPackingData();
         }
 
-        // ===== 新增：匯出Excel功能 =====
+        // ===== 匯出Excel功能 =====
         async function exportPackingExcel() {
             const btn = event.target;
             const originalText = btn.innerHTML;
