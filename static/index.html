@@ -4156,15 +4156,28 @@
             }
         }
 
+        // 修正：上傳完成後不自動開啟特定位置，而是返回總覽
         async function reloadCacheAfterUpload() {
             isUploading = false;
             currentUploadController = null;
             showToast('正在更新資料快取...', 'info');
+            
+            // 清除快取強制重新載入
             delete fullDataCache[currentPackingSheet];
+            
+            // 重置當前區域為全部
+            currentZone = 'all';
+            
+            // 重新載入資料
             await loadPackingData();
+            
+            // 確保顯示總覽頁面（不自動展開特定位置）
+            backToSummary();
+            
+            showToast('✅ 資料已更新並返回總覽', 'success');
         }
 
-        // ===== 新增：匯出Excel功能 =====
+        // Excel 匯出功能
         async function exportPackingExcel() {
             const btn = event.target;
             const originalText = btn.innerHTML;
@@ -4193,7 +4206,7 @@
                     document.body.removeChild(link);
                     URL.revokeObjectURL(link.href);
                     
-                    showToast('✅ Excel匯出成功', 'success');
+                    showToast(`✅ Excel匯出成功（共 ${result.totalRows || '未知'} 筆）`, 'success');
                 } else {
                     throw new Error(result.error || '匯出失敗');
                 }
