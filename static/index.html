@@ -4038,38 +4038,35 @@
         }
 
         /**
-         * 【修正2】清空功能 - 強制重置標題列並重新載入
-         */
-        async function clearPackingAll() {
-            const confirmMsg = currentPackingSheet === 'PackBox' 
-                ? '⚠️ 確定要清除 PACKBOX 全部資料嗎？\n\n此操作將刪除所有資料列（包含標題列），資料將完全清空並重建預設標題列。\n\n⚠️ 此操作無法復原！'
-                : '⚠️ 確定要清除 PACKBOXSPARE 全部資料嗎？\n\n此操作將刪除所有資料列（包含標題列），資料將完全清空並重建預設標題列。\n\n⚠️ 此操作無法復原！';
+ * 【修正】清空功能 - 完全清空所有內容（不重建標題）
+ */
+async function clearPackingAll() {
+    const confirmMsg = currentPackingSheet === 'PackBox' 
+        ? '⚠️ 確定要清除 PACKBOX 全部資料嗎？\n\n此操作將**完全清空**工作表所有內容（包含標題列），資料將無法復原！\n\n⚠️ 此操作無法復原！'
+        : '⚠️ 確定要清除 PACKBOXSPARE 全部資料嗎？\n\n此操作將**完全清空**工作表所有內容（包含標題列），資料將無法復原！\n\n⚠️ 此操作無法復原！';
 
-            if (!confirm(confirmMsg)) return;
+    if (!confirm(confirmMsg)) return;
 
-            try {
-                showToast('正在清空資料...', 'info');
+    try {
+        showToast('正在清空資料...', 'info');
 
-                // 【修正2】呼叫 GAS 的 packingClearAll（會強制重置標題列）
-                const result = await packingApiCall('packingClearAll', { 
-                    sheet: currentPackingSheet,
-                    includeHeader: false
-                });
-
-                if (result.success) {
-                    showToast('✅ ' + result.message, 'success');
-                    
-                    // 【修正2】強制重新載入標題列和資料，確保畫面同步
-                    await loadHeaders();
-                    await loadPackingData(1);
-                    backToSummary();
-                } else {
-                    showToast('❌ ' + result.error, 'error');
-                }
-            } catch (e) {
-                showToast('❌ 清空失敗：' + e.message, 'error');
-            }
+        // 【修正】不再傳遞 includeHeader 參數，完全清空
+        const result = await packingApiCall('packingClearAll', { 
+            sheet: currentPackingSheet
+        });
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            // 清空後重新載入資料（應該是空的）
+            await loadPackingData();
+        } else {
+            throw new Error(result.error);
         }
+    } catch (error) {
+        showToast('清空失敗: ' + error.message, 'error');
+        console.error('清空錯誤:', error);
+    }
+}
 
         //================ Excel 上傳與匯出功能 =================
         function showUploadModal() {
