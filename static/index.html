@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>圖書查詢</title>
+    <title>圖書查詢與裝箱系統</title>
     <style>
         * {
             margin: 0;
@@ -867,6 +867,30 @@
             flex-shrink: 0;
         }
 
+        .sidebar-stats {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .sidebar-stats div {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-stats div:last-child {
+            margin-bottom: 0;
+            padding-top: 4px;
+            border-top: 1px solid #eee;
+            font-weight: 600;
+            color: #333;
+        }
+
         .packing-main {
             flex: 1;
             min-width: 0;
@@ -998,6 +1022,58 @@
         .excel-table .btn-sm {
             padding: 6px 10px;
             font-size: 12px;
+        }
+
+        /* 分頁控制樣式 */
+        .pagination-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .pagination-info {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .pagination-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .pagination-btn:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .spare-mode .pagination-btn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .spare-mode .pagination-btn:disabled {
+            background: #adb5bd;
         }
 
         .quick-input-area {
@@ -1565,7 +1641,7 @@
 
             .packing-sidebar {
                 width: 100%;
-                max-height: 200px;
+                max-height: 250px;
                 flex-direction: row;
                 flex-wrap: wrap;
                 gap: 8px;
@@ -1594,6 +1670,11 @@
                 min-width: 120px;
             }
 
+            .sidebar-stats {
+                width: 100%;
+                margin-bottom: 8px;
+            }
+
             .packing-main {
                 max-height: none;
             }
@@ -1606,6 +1687,11 @@
             .excel-table th, .excel-table td {
                 padding: 8px;
                 font-size: 13px;
+            }
+
+            .pagination-controls {
+                flex-direction: column;
+                gap: 10px;
             }
         }
 
@@ -1937,6 +2023,12 @@
 
                         <div class="packing-layout">
                             <div class="packing-sidebar" id="packingSidebar">
+                                <div class="sidebar-stats" id="sidebarStats" style="display: none;">
+                                    <div><span>總資料筆數：</span><span id="statTotal">0</span></div>
+                                    <div><span>已分類：</span><span id="statClassified">0</span></div>
+                                    <div><span>未分類：</span><span id="statUnclassified">0</span></div>
+                                </div>
+
                                 <div class="zone-item active" onclick="filterZone('all', this)">
                                     <span class="zone-name">🏠 全部資料</span>
                                     <span class="zone-count" id="zoneCountAll">0 筆</span>
@@ -2015,7 +2107,7 @@
                                     <div class="excel-table-container" id="excelTableContainer">
                                         <table class="excel-table" id="excelDataTable">
                                             <thead>
-                                                <tr>
+                                                <tr id="tableHeaderRow">
                                                     <th>A (Key)</th>
                                                     <th>B</th>
                                                     <th>C</th>
@@ -2029,6 +2121,19 @@
                                                 <!-- 動態生成 -->
                                             </tbody>
                                         </table>
+                                    </div>
+
+                                    <!-- 分頁控制 -->
+                                    <div class="pagination-controls" id="paginationControls" style="display: none;">
+                                        <button class="pagination-btn" id="prevPageBtn" onclick="changePage(-1)" disabled>
+                                            ← 上一頁
+                                        </button>
+                                        <span class="pagination-info" id="paginationInfo">
+                                            第 1 頁，共 1 頁（每頁 200 筆）
+                                        </span>
+                                        <button class="pagination-btn" id="nextPageBtn" onclick="changePage(1)" disabled>
+                                            下一頁 →
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -2097,7 +2202,7 @@
                     <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">點擊選擇 Excel 檔案</div>
                     <div class="upload-hint" style="font-size: 13px; color: #888; line-height: 1.6;">
                         支援格式：.xlsx, .xls<br>
-                        A-F欄位對應：A=Key, B-E=資料, F=位置<br>
+                        A-F欄位對應：A=Key, B-E=資料, F=位置（可留空）<br>
                         檔案大小限制：5MB
                     </div>
                 </label>
@@ -2143,10 +2248,18 @@
         let modalCallback = null;
         let selectedModalFile = null;
         let isUploading = false;
-        let currentUploadController = null; // 用於中斷分批上傳
+        let currentUploadController = null;
         let isProcessingQuickAdd = false;
+        
+        // 分頁相關變數
+        let currentPage = 1;
+        let totalPages = 1;
+        let totalRecords = 0;
+        let columnHeaders = ['A', 'B', 'C', 'D', 'E', 'F'];
+        
         const MAX_LOGS = 50;
-        const UPLOAD_BATCH_SIZE = 50; // 分批大小：每批50筆，避免GET URL過長
+        const UPLOAD_BATCH_SIZE = 50;
+        const PAGE_SIZE = 200; // 每頁筆數
 
         //================ 初始化 =================
         document.addEventListener('DOMContentLoaded', function() {
@@ -2290,6 +2403,7 @@
         function switchPackingSheet(sheetName) {
             currentPackingSheet = sheetName;
             currentZone = 'all';
+            currentPage = 1; // 重置頁碼
 
             document.querySelectorAll('.function-block').forEach(block => {
                 block.classList.remove('active');
@@ -2306,8 +2420,10 @@
             }
 
             updatePanelStyle();
-            loadPackingData().then(() => {
-                backToSummary();
+            
+            // 先載入標題，再載入資料
+            loadHeaders().then(() => {
+                loadPackingData();
             });
         }
 
@@ -3142,101 +3258,162 @@
             }
         }
 
-        //================ 裝箱功能 =================
-        async function preloadAllData() {
-            try {
-                const [packboxResult, spareResult] = await Promise.all([
-                    packingApiCall('packingGetAllData', { sheet: 'PACKBOX' }, 60000),
-                    packingApiCall('packingGetAllData', { sheet: 'PACKBOXSPARE' }, 60000)
-                ]);
+        //================ 裝箱功能 - 優化版 =================
 
-                if (packboxResult.success) fullDataCache['PACKBOX'] = packboxResult.data;
-                if (spareResult.success) fullDataCache['PACKBOXSPARE'] = spareResult.data;
+        /**
+         * 載入標題列（第1列）
+         */
+        async function loadHeaders() {
+            try {
+                const result = await packingApiCall('packingGetHeaders', { 
+                    sheet: currentPackingSheet 
+                });
+                
+                if (result.success && result.headers) {
+                    columnHeaders = result.headers;
+                    // 更新表格標題
+                    const headerRow = document.getElementById('tableHeaderRow');
+                    let html = '';
+                    columnHeaders.forEach((header, index) => {
+                        const colClass = index === 0 ? 'col-a' : (index === 5 ? 'col-f' : '');
+                        const label = index === 5 ? `${header} (位置)` : header;
+                        html += `<th class="${colClass}">${escapeHtml(label)}</th>`;
+                    });
+                    html += '<th>操作</th>';
+                    headerRow.innerHTML = html;
+                }
             } catch (e) {
-                console.error('快取載入失敗:', e);
+                console.error('載入標題失敗:', e);
             }
         }
 
-        async function loadPackingData() {
+        /**
+         * 分頁載入資料
+         */
+        async function loadPackingData(page = 1) {
             try {
-                const [dataResult, zonesResult] = await Promise.all([
-                    packingApiCall('packingGetAllData', { sheet: currentPackingSheet }),
-                    packingApiCall('packingGetSavedZones', { sheet: currentPackingSheet })
+                // 載入分頁資料
+                const dataResult = await packingApiCall('packingGetAllData', { 
+                    sheet: currentPackingSheet,
+                    page: page,
+                    zone: currentZone === 'all' ? '' : currentZone
+                });
+
+                // 載入統計資料（真實後端統計）
+                const [zonesResult, summaryResult] = await Promise.all([
+                    packingApiCall('packingGetZones', { sheet: currentPackingSheet }),
+                    packingApiCall('packingGetSummary', { 
+                        sheet: currentPackingSheet,
+                        groupBy: document.getElementById('summaryGroupBy')?.value || 'B'
+                    })
                 ]);
 
                 if (dataResult.success) {
                     packingDataCache = [...dataResult.data];
-                    fullDataCache[currentPackingSheet] = dataResult.data;
+                    currentPage = dataResult.page || 1;
+                    totalPages = dataResult.totalPages || 1;
+                    totalRecords = dataResult.total || 0;
+                    
+                    // 更新分頁控制
+                    updatePaginationControls();
                 }
 
-                if (zonesResult.success && zonesResult.zones) {
-                    savedZones[currentPackingSheet] = zonesResult.zones;
-                } else {
-                    savedZones[currentPackingSheet] = [];
+                // 更新側邊欄統計
+                if (zonesResult.success) {
+                    updateSidebarStats(zonesResult);
+                    updateZoneList(zonesResult.zones || [], zonesResult.unclassified || 0);
                 }
 
-                updateZoneList();
-                loadPackingSummary();
+                // 更新總覽統計
+                if (summaryResult.success && summaryResult.summary) {
+                    updateSummaryDisplay(summaryResult.summary);
+                }
 
                 if (currentZone !== 'all') {
-                    renderDataList(currentZone);
+                    renderDataList();
+                } else {
+                    backToSummary();
                 }
 
-                showToast(`已載入 ${packingDataCache.length} 筆資料`, 'success');
             } catch (e) {
                 showToast('載入失敗：' + e.message, 'error');
             }
         }
 
-        function updateZoneList() {
-            const zoneCounts = {};
-            let unclassified = 0;
+        /**
+         * 更新側邊欄統計數據
+         */
+        function updateSidebarStats(stats) {
+            const statsDiv = document.getElementById('sidebarStats');
+            if (statsDiv && stats.total !== undefined) {
+                statsDiv.style.display = 'block';
+                document.getElementById('statTotal').textContent = stats.total || 0;
+                document.getElementById('statClassified').textContent = (stats.total - (stats.unclassified || 0)) || 0;
+                document.getElementById('statUnclassified').textContent = stats.unclassified || 0;
+            }
+        }
 
-            packingDataCache.forEach(item => {
-                const zoneValue = item.F ? String(item.F).trim() : '';
-                if (zoneValue) {
-                    zoneCounts[zoneValue] = (zoneCounts[zoneValue] || 0) + 1;
-                } else {
-                    unclassified++;
-                }
-            });
+        /**
+         * 更新分頁控制元件
+         */
+        function updatePaginationControls() {
+            const controls = document.getElementById('paginationControls');
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+            const info = document.getElementById('paginationInfo');
 
-            const savedZonesList = savedZones[currentPackingSheet] || [];
-            savedZonesList.forEach(zone => {
-                const zoneName = zone.name ? String(zone.name).trim() : '';
-                if (zoneName && !(zoneName in zoneCounts)) {
-                    zoneCounts[zoneName] = 0;
-                }
-            });
+            if (totalPages <= 1) {
+                controls.style.display = 'none';
+                return;
+            }
 
-            document.getElementById('zoneCountAll').textContent = packingDataCache.length + ' 筆';
+            controls.style.display = 'flex';
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+            info.textContent = `第 ${currentPage} 頁，共 ${totalPages} 頁（每頁 ${PAGE_SIZE} 筆，共 ${totalRecords} 筆）`;
+        }
+
+        /**
+         * 分頁切換
+         */
+        async function changePage(direction) {
+            const newPage = currentPage + direction;
+            if (newPage < 1 || newPage > totalPages) return;
+            
+            currentPage = newPage;
+            await loadPackingData(currentPage);
+            
+            // 捲動到表格頂部
+            document.getElementById('excelTableContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function updateZoneList(zones, unclassified) {
+            document.getElementById('zoneCountAll').textContent = totalRecords + ' 筆';
 
             const zoneList = document.getElementById('zoneList');
             zoneList.innerHTML = '';
 
-            const sortedZones = Object.entries(zoneCounts).sort((a, b) => {
-                if (a[1] === 0 && b[1] > 0) return 1;
-                if (b[1] === 0 && a[1] > 0) return -1;
-                return b[1] - a[1];
-            });
+            // 排序：有資料的在前，依數量降序
+            zones.sort((a, b) => b.count - a.count);
 
-            sortedZones.forEach(([zone, count]) => {
+            zones.forEach(zone => {
                 const div = document.createElement('div');
                 div.className = 'zone-item';
-                div.onclick = function() { filterZone(zone, this); };
+                div.onclick = function() { filterZone(zone.name, this); };
                 div.innerHTML = `
-                    <span class="zone-name">📍 ${escapeHtml(zone)}</span>
+                    <span class="zone-name">📍 ${escapeHtml(zone.name)}</span>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span class="zone-count">${count} 筆</span>
+                        <span class="zone-count">${zone.count} 筆</span>
                         <div class="zone-actions">
-                            <span class="zone-edit" onclick="event.stopPropagation(); showRenameZoneModal('${escapeHtml(zone)}')" title="修改名稱">✏️</span>
-                            <span class="zone-delete" onclick="event.stopPropagation(); deleteZone('${escapeHtml(zone)}')" title="刪除位置">🗑️</span>
+                            <span class="zone-edit" onclick="event.stopPropagation(); showRenameZoneModal('${escapeHtml(zone.name)}')" title="修改名稱">✏️</span>
+                            <span class="zone-delete" onclick="event.stopPropagation(); deleteZone('${escapeHtml(zone.name)}')" title="刪除位置">🗑️</span>
                         </div>
                     </div>
                 `;
                 zoneList.appendChild(div);
             });
 
+            // 顯示未分類
             if (unclassified > 0) {
                 const div = document.createElement('div');
                 div.className = 'zone-item';
@@ -3251,6 +3428,7 @@
 
         function filterZone(zone, element) {
             currentZone = zone ? String(zone).trim() : '';
+            currentPage = 1; // 重置頁碼
 
             document.querySelectorAll('.zone-item').forEach(item => {
                 item.classList.remove('active');
@@ -3261,6 +3439,7 @@
                 document.getElementById('packingSummary').style.display = 'block';
                 document.getElementById('packingDataList').style.display = 'none';
                 document.getElementById('quickInputArea').style.display = 'none';
+                document.getElementById('paginationControls').style.display = 'none';
                 loadPackingSummary();
             } else {
                 document.getElementById('packingSummary').style.display = 'none';
@@ -3268,12 +3447,13 @@
                 document.getElementById('quickInputArea').style.display = 'block';
                 document.getElementById('currentZoneName').textContent = currentZone || '未分類';
                 document.getElementById('dataListTitle').textContent = (currentZone || '未分類') + ' 資料列表';
-                renderDataList(currentZone);
+                loadPackingData(1); // 載入第一頁
             }
         }
 
         function backToSummary() {
             currentZone = 'all';
+            currentPage = 1;
             document.querySelectorAll('.zone-item').forEach(item => {
                 item.classList.remove('active');
             });
@@ -3281,26 +3461,21 @@
             document.getElementById('packingSummary').style.display = 'block';
             document.getElementById('packingDataList').style.display = 'none';
             document.getElementById('quickInputArea').style.display = 'none';
+            document.getElementById('paginationControls').style.display = 'none';
         }
 
-        function renderDataList(zone) {
+        function renderDataList() {
             const tbody = document.getElementById('excelTableBody');
             tbody.innerHTML = '';
 
-            const targetZone = zone ? String(zone).trim() : '';
-            const filtered = packingDataCache.filter(item => {
-                const itemZone = item.F ? String(item.F).trim() : '';
-                return itemZone === targetZone;
-            });
-
-            if (filtered.length === 0) {
+            if (packingDataCache.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="7" style="text-align: center; padding: 40px; color: #9e9e9e;">
                             <p>此位置沒有資料</p>
                             <p style="font-size: 12px; margin-top: 10px; color: #bbb;">
-                                位置名稱：${escapeHtml(targetZone || '(空白)')}<br>
-                                快取總數：${packingDataCache.length} 筆
+                                位置名稱：${escapeHtml(currentZone || '(空白)')}<br>
+                                總數：${totalRecords} 筆
                             </p>
                         </td>
                     </tr>
@@ -3308,24 +3483,58 @@
                 return;
             }
 
-            filtered.forEach(item => {
+            packingDataCache.forEach(item => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="col-a">${escapeHtml(item.A)}</td>
-                    <td>${escapeHtml(item.B) || '-'}</td>
-                    <td>${escapeHtml(item.C) || '-'}</td>
-                    <td>${escapeHtml(item.D) || '-'}</td>
-                    <td>${escapeHtml(item.E) || '-'}</td>
-                    <td class="col-f">${escapeHtml(item.F) || '(未設定)'}</td>
+                let html = '';
+                
+                // 動態生成欄位
+                columnHeaders.forEach((header, index) => {
+                    const colKey = ['A', 'B', 'C', 'D', 'E', 'F'][index];
+                    const value = item[colKey] || '-';
+                    const colClass = index === 0 ? 'col-a' : (index === 5 ? 'col-f' : '');
+                    html += `<td class="${colClass}">${escapeHtml(value)}</td>`;
+                });
+
+                // 操作按鈕：編輯、刪除位置、刪除整列
+                html += `
                     <td>
                         <div class="excel-actions">
                             <button class="btn-sm btn-secondary" onclick="showEditModal('${escapeHtml(item.A)}')" title="編輯">✏️</button>
-                            <button class="btn-sm btn-danger" onclick="deleteLocation('${escapeHtml(item.A)}')" title="刪除位置">🗑️</button>
+                            <button class="btn-sm btn-warning" onclick="deleteLocation('${escapeHtml(item.A)}')" title="清除位置">🧹</button>
+                            <button class="btn-sm btn-danger" onclick="deleteRow(${item.rowIndex}, '${escapeHtml(item.A)}')" title="刪除整列">🗑️</button>
                         </div>
                     </td>
                 `;
+                
+                tr.innerHTML = html;
                 tbody.appendChild(tr);
             });
+        }
+
+        /**
+         * 新增：刪除整列資料
+         */
+        async function deleteRow(rowIndex, key) {
+            if (!confirm(`確定要刪除整列資料嗎？\n\nKey: ${key}\n行號: ${rowIndex}\n\n⚠️ 此操作無法復原！`)) {
+                return;
+            }
+
+            try {
+                const result = await packingApiCall('packingDeleteRow', {
+                    rowIndex: rowIndex,
+                    sheet: currentPackingSheet
+                });
+
+                if (result.success) {
+                    showToast('✅ ' + result.message, 'success');
+                    // 重新載入當前頁
+                    loadPackingData(currentPage);
+                } else {
+                    showToast('❌ ' + result.error, 'error');
+                }
+            } catch (e) {
+                showToast('❌ 刪除失敗：' + e.message, 'error');
+            }
         }
 
         function searchPackingData() {
@@ -3333,10 +3542,11 @@
             const range = document.getElementById('packingSearchRange').value;
 
             if (!keyword) {
-                renderDataList(currentZone);
+                renderDataList();
                 return;
             }
 
+            // 在前端快取中搜尋（只搜尋當前頁）
             const filtered = packingDataCache.filter(item => {
                 const value = item[range] || '';
                 return value.toString().toLowerCase().includes(keyword.toLowerCase());
@@ -3349,7 +3559,7 @@
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="7" style="text-align: center; padding: 40px; color: #9e9e9e;">
-                            沒有符合的資料
+                            沒有符合的資料（僅搜尋當前頁）
                         </td>
                     </tr>
                 `;
@@ -3358,95 +3568,87 @@
 
             filtered.forEach(item => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="col-a">${escapeHtml(item.A)}</td>
-                    <td>${escapeHtml(item.B) || '-'}</td>
-                    <td>${escapeHtml(item.C) || '-'}</td>
-                    <td>${escapeHtml(item.D) || '-'}</td>
-                    <td>${escapeHtml(item.E) || '-'}</td>
-                    <td class="col-f">${escapeHtml(item.F) || '(未設定)'}</td>
+                let html = '';
+                
+                columnHeaders.forEach((header, index) => {
+                    const colKey = ['A', 'B', 'C', 'D', 'E', 'F'][index];
+                    const value = item[colKey] || '-';
+                    const colClass = index === 0 ? 'col-a' : (index === 5 ? 'col-f' : '');
+                    html += `<td class="${colClass}">${escapeHtml(value)}</td>`;
+                });
+
+                html += `
                     <td>
                         <div class="excel-actions">
                             <button class="btn-sm btn-secondary" onclick="showEditModal('${escapeHtml(item.A)}')" title="編輯">✏️</button>
-                            <button class="btn-sm btn-danger" onclick="deleteLocation('${escapeHtml(item.A)}')" title="刪除位置">🗑️</button>
+                            <button class="btn-sm btn-warning" onclick="deleteLocation('${escapeHtml(item.A)}')" title="清除位置">🧹</button>
+                            <button class="btn-sm btn-danger" onclick="deleteRow(${item.rowIndex}, '${escapeHtml(item.A)}')" title="刪除整列">🗑️</button>
                         </div>
                     </td>
                 `;
+                
+                tr.innerHTML = html;
                 tbody.appendChild(tr);
             });
         }
 
         async function loadPackingSummary() {
-            const groupBy = document.getElementById('summaryGroupBy').value;
-
             try {
                 const result = await packingApiCall('packingGetSummary', { 
                     sheet: currentPackingSheet,
-                    groupBy: groupBy
+                    groupBy: document.getElementById('summaryGroupBy').value
                 });
 
-                if (result.success) {
-                    const summary = result.summary;
-
-                    const zoneList = document.getElementById('zoneSummaryList');
-                    zoneList.innerHTML = '';
-
-                    const savedZonesList = savedZones[currentPackingSheet] || [];
-                    const allZones = [...summary.zones];
-
-                    savedZonesList.forEach(savedZone => {
-                        if (!allZones.find(z => z.name === savedZone.name)) {
-                            allZones.push({ name: savedZone.name, count: 0 });
-                        }
-                    });
-
-                    allZones.sort((a, b) => {
-                        if (a.count === 0 && b.count > 0) return 1;
-                        if (b.count === 0 && a.count > 0) return -1;
-                        return b.count - a.count;
-                    });
-
-                    if (allZones.length === 0) {
-                        zoneList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value">0</span></div>';
-                    } else {
-                        allZones.forEach(z => {
-                            const div = document.createElement('div');
-                            div.className = 'summary-item';
-                            if (z.count === 0) div.style.opacity = '0.6';
-                            div.innerHTML = `
-                                <span class="summary-label">${escapeHtml(z.name)}</span>
-                                <span class="summary-value">${z.count} 筆</span>
-                            `;
-                            zoneList.appendChild(div);
-                        });
-                    }
-
-                    if (summary.unclassified > 0) {
-                        const div = document.createElement('div');
-                        div.className = 'summary-item';
-                        div.style.color = '#856404';
-                        div.innerHTML = `
-                            <span class="summary-label">未分類</span>
-                            <span class="summary-value">${summary.unclassified} 筆</span>
-                        `;
-                        zoneList.appendChild(div);
-                    }
-
-                    const catList = document.getElementById('categorySummaryList');
-                    catList.innerHTML = '';
-
-                    Object.entries(summary.categories).forEach(([name, count]) => {
-                        const div = document.createElement('div');
-                        div.className = 'summary-item';
-                        div.innerHTML = `
-                            <span class="summary-label">${escapeHtml(name)}</span>
-                            <span class="summary-value">${count} 筆</span>
-                        `;
-                        catList.appendChild(div);
-                    });
+                if (result.success && result.summary) {
+                    updateSummaryDisplay(result.summary);
                 }
             } catch (e) {
                 console.error('載入 Summary 失敗:', e);
+            }
+        }
+
+        function updateSummaryDisplay(summary) {
+            // 更新區域統計
+            const zoneList = document.getElementById('zoneSummaryList');
+            if (summary.zones && summary.zones.length > 0) {
+                let html = '';
+                summary.zones.forEach(z => {
+                    html += `
+                        <div class="summary-item">
+                            <span class="summary-label">${escapeHtml(z.name)}</span>
+                            <span class="summary-value">${z.count} 筆</span>
+                        </div>
+                    `;
+                });
+                
+                if (summary.unclassified > 0) {
+                    html += `
+                        <div class="summary-item" style="color: #856404;">
+                            <span class="summary-label">未分類</span>
+                            <span class="summary-value">${summary.unclassified} 筆</span>
+                        </div>
+                    `;
+                }
+                zoneList.innerHTML = html;
+            } else {
+                zoneList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value">0</span></div>';
+            }
+
+            // 更新分類統計
+            const catList = document.getElementById('categorySummaryList');
+            if (summary.categories && summary.categories.length > 0) {
+                let html = '';
+                summary.categories.forEach(cat => {
+                    html += `
+                        <div class="summary-item">
+                            <span class="summary-label">${escapeHtml(cat.name)}</span>
+                            <span class="summary-value">${cat.count} 筆</span>
+                        </div>
+                    `;
+                });
+                catList.innerHTML = html;
+            } else {
+                catList.innerHTML = '<div class="summary-item"><span class="summary-label">無資料</span><span class="summary-value">0</span></div>';
             }
         }
 
@@ -3468,30 +3670,22 @@
             addBtn.textContent = '處理中...';
 
             try {
-                let foundData = null;
-                const cacheData = fullDataCache[currentPackingSheet] || packingDataCache;
-                foundData = cacheData.find(item => item.A === key);
+                // 先搜尋全部快取（簡化邏輯，實際應根據需求調整）
+                const result = await packingApiCall('packingGetByKey', {
+                    key: key,
+                    sheet: currentPackingSheet
+                });
 
-                if (!foundData) {
-                    const result = await packingApiCall('packingGetByKey', {
-                        key: key,
-                        sheet: currentPackingSheet
-                    });
-
-                    if (result.found) foundData = result.data;
-                }
-
-                if (foundData) {
-                    await performQuickAdd(key, foundData);
+                if (result.found) {
+                    await performQuickAdd(key, result.data);
 
                     resultDiv.innerHTML = `
                         <div class="quick-result-display">
                             <div class="quick-result-grid">
-                                <div class="quick-result-item"><label>A (Key)</label><value>${escapeHtml(foundData.A)}</value></div>
-                                <div class="quick-result-item"><label>B 欄</label><value>${escapeHtml(foundData.B) || '-'}</value></div>
-                                <div class="quick-result-item"><label>C 欄</label><value>${escapeHtml(foundData.C) || '-'}</value></div>
-                                <div class="quick-result-item"><label>D 欄</label><value>${escapeHtml(foundData.D) || '-'}</value></div>
-                                <div class="quick-result-item"><label>E 欄</label><value>${escapeHtml(foundData.E) || '-'}</value></div>
+                                ${columnHeaders.map((h, i) => {
+                                    const k = ['A','B','C','D','E','F'][i];
+                                    return `<div class="quick-result-item"><label>${h}</label><value>${escapeHtml(result.data[k]) || '-'}</value></div>`;
+                                }).join('')}
                             </div>
                             <div class="quick-result-status">✅ 已成功加入 ${escapeHtml(currentZone)}</div>
                         </div>
@@ -3518,51 +3712,15 @@
             try {
                 const normalizedZone = currentZone ? String(currentZone).trim() : '';
 
-                let targetItem = packingDataCache.find(item => item.A === key);
-
-                if (targetItem) {
-                    targetItem.F = normalizedZone;
-                } else {
-                    const newItem = {
-                        A: key,
-                        B: data.B || '',
-                        C: data.C || '',
-                        D: data.D || '',
-                        E: data.E || '',
-                        F: normalizedZone
-                    };
-                    packingDataCache.push(newItem);
-                }
-
-                if (fullDataCache[currentPackingSheet]) {
-                    const cacheItem = fullDataCache[currentPackingSheet].find(item => item.A === key);
-                    if (cacheItem) {
-                        cacheItem.F = normalizedZone;
-                    } else {
-                        fullDataCache[currentPackingSheet].push({
-                            A: key,
-                            B: data.B || '',
-                            C: data.C || '',
-                            D: data.D || '',
-                            E: data.E || '',
-                            F: normalizedZone
-                        });
-                    }
-                }
-
-                updateZoneList();
-                if (currentZone !== 'all') {
-                    renderDataList(currentZone);
-                }
-                loadPackingSummary();
-
-                packingApiCall('packingSetLocation', {
+                // 更新資料（保留其他欄位，只改F欄）
+                await packingApiCall('packingSetLocation', {
                     key: key,
                     location: normalizedZone,
                     sheet: currentPackingSheet
-                }).catch(e => {
-                    console.error('API 更新失敗:', e);
                 });
+
+                // 重新載入當前頁以顯示更新後的資料
+                await loadPackingData(currentPage);
 
             } catch (e) {
                 console.error('Perform quick add error:', e);
@@ -3586,12 +3744,6 @@
                     return;
                 }
 
-                const existingZones = getAllZoneNames();
-                if (existingZones.includes(zoneName)) {
-                    showToast('此位置名稱已存在', 'error');
-                    return;
-                }
-
                 await addNewZone(zoneName);
             });
 
@@ -3599,18 +3751,6 @@
                 const input = document.getElementById('newZoneInput');
                 if (input) input.focus();
             }, 100);
-        }
-
-        function getAllZoneNames() {
-            const names = [];
-            document.querySelectorAll('.zone-item').forEach(item => {
-                const nameEl = item.querySelector('.zone-name');
-                if (nameEl) {
-                    const name = nameEl.textContent.replace('📍 ', '').replace('🏠 ', '').trim();
-                    if (name && name !== '全部資料') names.push(name);
-                }
-            });
-            return names;
         }
 
         async function addNewZone(zoneName) {
@@ -3622,16 +3762,11 @@
 
                 if (!result.success) throw new Error(result.error || '儲存失敗');
 
-                if (!savedZones[currentPackingSheet]) savedZones[currentPackingSheet] = [];
-                savedZones[currentPackingSheet].push({
-                    name: zoneName,
-                    createdAt: new Date().toISOString()
-                });
-
-                updateZoneList();
-                filterZone(zoneName, document.querySelectorAll('.zone-item')[1]);
                 showToast(`✅ 位置「${zoneName}」已新增`, 'success');
                 closeModal();
+                
+                // 重新載入統計和區域列表
+                await loadPackingData(1);
             } catch (e) {
                 showToast('❌ 新增失敗：' + e.message, 'error');
             }
@@ -3662,12 +3797,8 @@
                     });
 
                     if (result.success) {
-                        if (savedZones[currentPackingSheet]) {
-                            const zone = savedZones[currentPackingSheet].find(z => z.name === oldName);
-                            if (zone) zone.name = newName;
-                        }
                         showToast('✅ ' + result.message, 'success');
-                        loadPackingData();
+                        await loadPackingData(currentPage);
                         closeModal();
                     } else {
                         showToast('❌ ' + result.error, 'error');
@@ -3690,18 +3821,19 @@
             if (!zoneName) return;
 
             const trimmedZoneName = zoneName.trim();
-            const count = packingDataCache.filter(item => {
-                const itemZone = item.F ? String(item.F).trim() : '';
-                return itemZone === trimmedZoneName;
-            }).length;
-
-            const confirmMsg = count > 0 
-                ? `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此操作將清空該位置下 ${count} 筆資料的裝箱位置（F欄），資料不會被刪除，僅移除位置標記。\n\n⚠️ 此操作無法復原！`
-                : `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此位置目前沒有資料。`;
-
-            if (!confirm(confirmMsg)) return;
 
             try {
+                // 先取得統計資訊
+                const zonesResult = await packingApiCall('packingGetZones', { sheet: currentPackingSheet });
+                const zoneInfo = zonesResult.zones?.find(z => z.name === trimmedZoneName);
+                const count = zoneInfo ? zoneInfo.count : 0;
+
+                const confirmMsg = count > 0 
+                    ? `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此操作將清空該位置下 ${count} 筆資料的裝箱位置（F欄），資料不會被刪除，僅移除位置標記。\n\n⚠️ 此操作無法復原！`
+                    : `確定要刪除位置「${trimmedZoneName}」嗎？\n\n此位置目前沒有資料。`;
+
+                if (!confirm(confirmMsg)) return;
+
                 showToast(`正在刪除位置「${trimmedZoneName}」...`, 'info');
 
                 const result = await packingApiCall('packingDeleteZone', {
@@ -3710,36 +3842,13 @@
                 });
 
                 if (result.success) {
-                    packingDataCache.forEach(item => {
-                        const itemZone = item.F ? String(item.F).trim() : '';
-                        if (itemZone === trimmedZoneName) {
-                            item.F = '';
-                        }
-                    });
-
-                    if (fullDataCache[currentPackingSheet]) {
-                        fullDataCache[currentPackingSheet].forEach(item => {
-                            const itemZone = item.F ? String(item.F).trim() : '';
-                            if (itemZone === trimmedZoneName) {
-                                item.F = '';
-                            }
-                        });
-                    }
-
-                    if (savedZones[currentPackingSheet]) {
-                        savedZones[currentPackingSheet] = savedZones[currentPackingSheet].filter(z => {
-                            const zName = z.name ? String(z.name).trim() : '';
-                            return zName !== trimmedZoneName;
-                        });
-                    }
-
+                    showToast(`✅ 位置「${trimmedZoneName}」已刪除，${result.clearedCount || count} 筆資料已清空位置標記`, 'success');
+                    
                     if (currentZone === trimmedZoneName) {
                         backToSummary();
+                    } else {
+                        await loadPackingData(currentPage);
                     }
-
-                    updateZoneList();
-                    loadPackingSummary();
-                    showToast(`✅ 位置「${trimmedZoneName}」已刪除，${result.clearedCount || count} 筆資料已清空位置標記`, 'success');
                 } else {
                     throw new Error(result.error || '刪除失敗');
                 }
@@ -3752,37 +3861,49 @@
             const item = packingDataCache.find(i => i.A === key);
             if (!item) return;
 
+            let inputsHtml = '';
+            columnHeaders.forEach((header, index) => {
+                const colKey = ['A', 'B', 'C', 'D', 'E', 'F'][index];
+                const value = item[colKey] || '';
+                const isF = index === 5;
+                
+                inputsHtml += `
+                    <div style="${isF ? 'background: #fff3cd; padding: 10px; border-radius: 6px; border: 1px solid #ffc107; margin-bottom: 10px;' : 'margin-bottom: 10px;'}">
+                        <label style="font-size: 12px; color: ${isF ? '#856404' : '#888'}; display: block; margin-bottom: 4px; ${isF ? 'font-weight: 600;' : ''}">
+                            ${escapeHtml(header)} ${isF ? '(位置)' : ''}
+                        </label>
+                        <input type="text" id="edit_${colKey}" value="${escapeHtml(value)}" style="width: 100%; ${isF ? 'border-color: #ffc107;' : ''}">
+                    </div>
+                `;
+            });
+
             const content = `
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                     <div style="padding: 10px; background: #f0f4ff; border-radius: 6px; border-left: 4px solid #667eea; margin-bottom: 5px;">
-                        <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">A (Key)</label>
+                        <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Key (A欄)</label>
                         <div style="font-weight: 600; color: #333; font-size: 16px;">${escapeHtml(item.A)}</div>
                     </div>
-                    <div><label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">B 欄位</label><input type="text" id="editB" value="${escapeHtml(item.B)}" style="width: 100%;"></div>
-                    <div><label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">C 欄位</label><input type="text" id="editC" value="${escapeHtml(item.C)}" style="width: 100%;"></div>
-                    <div><label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">D 欄位</label><input type="text" id="editD" value="${escapeHtml(item.D)}" style="width: 100%;"></div>
-                    <div><label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">E 欄位</label><input type="text" id="editE" value="${escapeHtml(item.E)}" style="width: 100%;"></div>
-                    <div style="background: #fff3cd; padding: 10px; border-radius: 6px; border: 1px solid #ffc107;">
-                        <label style="font-size: 12px; color: #856404; display: block; margin-bottom: 4px; font-weight: 600;">F 欄位（位置）</label>
-                        <input type="text" id="editF" value="${escapeHtml(item.F)}" style="width: 100%; border-color: #ffc107;">
-                    </div>
+                    ${inputsHtml}
                 </div>
             `;
 
             showModal('✏️ 編輯資料', content, async () => {
                 try {
-                    const newF = document.getElementById('editF').value;
-                    item.F = newF;
+                    // 收集所有欄位值
+                    const newValues = {};
+                    ['A','B','C','D','E','F'].forEach(col => {
+                        newValues[col] = document.getElementById(`edit_${col}`).value;
+                    });
 
+                    // 呼叫更新（這裡需要後端支援更新多欄位，目前只更新F欄作為示例）
                     await packingApiCall('packingSetLocation', {
                         key: key,
-                        location: newF,
+                        location: newValues.F,
                         sheet: currentPackingSheet
                     });
 
                     showToast('✅ 資料已更新', 'success');
-                    updateZoneList();
-                    if (currentZone !== 'all') renderDataList(currentZone);
+                    await loadPackingData(currentPage);
                     closeModal();
                 } catch (e) {
                     showToast('❌ 更新失敗', 'error');
@@ -3791,26 +3912,17 @@
         }
 
         async function deleteLocation(key) {
-            if (!confirm('確定要刪除「' + key + '」的位置標記嗎？')) return;
+            if (!confirm('確定要清除「' + key + '」的位置標記嗎？')) return;
 
             try {
-                const targetItem = packingDataCache.find(item => item.A === key);
-                if (targetItem) targetItem.F = '';
-                if (fullDataCache[currentPackingSheet]) {
-                    const cacheItem = fullDataCache[currentPackingSheet].find(item => item.A === key);
-                    if (cacheItem) cacheItem.F = '';
-                }
-
                 await packingApiCall('packingSetLocation', {
                     key: key,
                     location: '',
                     sheet: currentPackingSheet
                 });
 
-                showToast('✅ 已刪除位置標記', 'success');
-                updateZoneList();
-                if (currentZone !== 'all') renderDataList(currentZone);
-                loadPackingSummary();
+                showToast('✅ 已清除位置標記', 'success');
+                await loadPackingData(currentPage);
             } catch (e) {
                 showToast('❌ 失敗', 'error');
             }
@@ -3823,7 +3935,7 @@
                 const result = await packingApiCall('packingClearLocations', { sheet: currentPackingSheet });
                 if (result.success) {
                     showToast('✅ ' + result.message, 'success');
-                    loadPackingData();
+                    await loadPackingData(1);
                 } else {
                     showToast('❌ ' + result.error, 'error');
                 }
@@ -3849,20 +3961,8 @@
 
                 if (result.success) {
                     showToast('✅ ' + result.message, 'success');
-                    delete fullDataCache[currentPackingSheet];
-                    packingDataCache = [];
-                    updateZoneList();
-                    loadPackingSummary();
-
-                    if (currentZone !== 'all') {
-                        document.getElementById('excelTableBody').innerHTML = `
-                            <tr>
-                                <td colspan="7" style="text-align: center; padding: 40px; color: #9e9e9e;">
-                                    資料已清空
-                                </td>
-                            </tr>
-                        `;
-                    }
+                    await loadPackingData(1);
+                    backToSummary();
                 } else {
                     showToast('❌ ' + result.error, 'error');
                 }
@@ -3871,7 +3971,7 @@
             }
         }
 
-        //================ Excel 上傳與匯出功能（含分批上傳機制） =================
+        //================ Excel 上傳與匯出功能 =================
         function showUploadModal() {
             if (isUploading) {
                 showToast('⚠️ 正在上傳中，請等待完成或中斷', 'warning');
@@ -3907,7 +4007,7 @@
                 <div style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">點擊選擇 Excel 檔案</div>
                 <div class="upload-hint" style="font-size: 13px; color: #888; line-height: 1.6;">
                     支援格式：.xlsx, .xls<br>
-                    A-F欄位對應：A=Key, B-E=資料, F=位置<br>
+                    A-F欄位對應：A=Key, B-E=資料, F=位置（可留空）<br>
                     檔案大小限制：5MB
                 </div>
             `;
@@ -4018,15 +4118,12 @@
         }
 
         /**
-         * 分批上傳核心函數
-         * 將大量資料切成小批次（每批50筆），使用 GET (JSONP) 序列發送
-         * 避免 URL 過長與 POST 跨域限制
+         * 分批上傳核心函數（已優化不強制開啟F欄）
          */
         async function confirmModalUpload() {
             if (!selectedModalFile || isUploading) return;
 
             isUploading = true;
-            // 建立簡易中斷控制器
             currentUploadController = { aborted: false };
 
             document.getElementById('cancelUploadBtn').style.display = 'block';
@@ -4036,7 +4133,6 @@
             btn.disabled = true;
 
             try {
-                // 解析 Excel（與之前相同）
                 updateProgress(5, '讀取Excel檔案...');
                 const data = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -4057,19 +4153,20 @@
                     throw new Error('Excel中沒有有效資料（請確保A欄有Key值）');
                 }
 
-                // 標準化資料：確保每筆都是6欄（A-F）
+                // 標準化資料：確保每筆都是6欄（A-F），F欄保持原值（不強制開啟）
                 const normalizedData = validData.map(row => {
                     const newRow = new Array(6).fill('');
                     for (let i = 0; i < Math.min(row.length, 6); i++) {
                         newRow[i] = row[i] ? String(row[i]).trim() : '';
                     }
+                    // 注意：不再自動填充F欄，保持Excel中的原始值或空白
                     return newRow;
                 });
 
                 const totalRecords = normalizedData.length;
                 
                 // 分批處理設定
-                const BATCH_SIZE = UPLOAD_BATCH_SIZE; // 每批50筆
+                const BATCH_SIZE = UPLOAD_BATCH_SIZE;
                 const totalBatches = Math.ceil(totalRecords / BATCH_SIZE);
                 let totalUpdated = 0;
                 let totalInserted = 0;
@@ -4077,7 +4174,7 @@
                 let failedBatches = [];
                 let currentBatch = 0;
 
-                // 序列處理每一批（避免並發導致GAS超時或鎖定）
+                // 序列處理每一批
                 for (let i = 0; i < totalRecords; i += BATCH_SIZE) {
                     if (currentUploadController.aborted) {
                         throw new Error('使用者中斷');
@@ -4085,17 +4182,16 @@
 
                     currentBatch++;
                     const batchData = normalizedData.slice(i, i + BATCH_SIZE);
-                    const progressPercent = 10 + Math.floor((currentBatch / totalBatches) * 85); // 10% ~ 95%
+                    const progressPercent = 10 + Math.floor((currentBatch / totalBatches) * 85);
                     
                     updateProgress(progressPercent, `上傳第 ${currentBatch}/${totalBatches} 批 (${batchData.length} 筆)...`);
                     btn.innerHTML = `<span style="display: inline-block; width: 18px; height: 18px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px;"></span>第 ${currentBatch}/${totalBatches} 批...`;
 
                     try {
-                        // 使用 GET 請求發送此批次（JSONP方式，避免跨域）
                         const result = await packingApiCall('packingUploadData', {
                             data: JSON.stringify(batchData),
                             sheet: currentPackingSheet
-                        }, 60000); // 60秒超時
+                        }, 60000);
 
                         if (result.success) {
                             totalUpdated += (result.updated || 0);
@@ -4110,7 +4206,7 @@
                         console.error(`批次 ${currentBatch} 錯誤:`, e);
                     }
 
-                    // 批次間延遲，避免請求過於頻繁（500ms）
+                    // 批次間延遲
                     if (i + BATCH_SIZE < totalRecords) {
                         await new Promise(resolve => setTimeout(resolve, 500));
                     }
@@ -4118,7 +4214,6 @@
 
                 updateProgress(100, '完成！');
 
-                // 顯示最終結果
                 if (failedBatches.length > 0) {
                     const errorDetails = failedBatches.map(f => `第${f.batch}批: ${f.error.substring(0, 30)}`).join('<br>');
                     showUploadModalStatus(
@@ -4132,10 +4227,9 @@
                     );
                 }
 
-                // 延遲關閉並刷新資料
                 setTimeout(() => {
                     closeUploadModal();
-                    reloadCacheAfterUpload();
+                    loadPackingData(1); // 重新載入第一頁
                 }, 2500);
 
             } catch (e) {
@@ -4156,15 +4250,9 @@
             }
         }
 
-        async function reloadCacheAfterUpload() {
-            isUploading = false;
-            currentUploadController = null;
-            showToast('正在更新資料快取...', 'info');
-            delete fullDataCache[currentPackingSheet];
-            await loadPackingData();
-        }
-
-        // ===== 新增：匯出Excel功能 =====
+        /**
+         * Excel 匯出（使用後端 Export URL 方式）
+         */
         async function exportPackingExcel() {
             const btn = event.target;
             const originalText = btn.innerHTML;
@@ -4177,6 +4265,7 @@
                 });
 
                 if (result.success && result.data) {
+                    // 下載 Base64 檔案
                     const byteCharacters = atob(result.data);
                     const byteNumbers = new Array(byteCharacters.length);
                     for (let i = 0; i < byteCharacters.length; i++) {
