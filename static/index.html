@@ -4053,7 +4053,7 @@
                 // 【修正2】呼叫 GAS 的 packingClearAll（會強制重置標題列）
                 const result = await packingApiCall('packingClearAll', { 
                     sheet: currentPackingSheet,
-                    includeHeader: true
+                    includeHeader: false
                 });
 
                 if (result.success) {
